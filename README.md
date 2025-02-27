@@ -1,29 +1,66 @@
-This is a [RainbowKit](https://rainbowkit.com) + [wagmi](https://wagmi.sh) + [Next.js](https://nextjs.org/) project bootstrapped with [`create-rainbowkit`](/packages/create-rainbowkit).
+## Foundry
 
-## Getting Started
+**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
 
-First, run the development server:
+Foundry consists of:
 
-```bash
-npm run dev
+-   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
+-   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
+-   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
+-   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+
+## Documentation
+
+https://book.getfoundry.sh/
+
+## Usage
+
+### Build
+
+```shell
+$ forge build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Test
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+```shell
+$ forge test
+```
 
-## Learn More
+### Format
 
-To learn more about this stack, take a look at the following resources:
+```shell
+$ forge fmt
+```
 
-- [RainbowKit Documentation](https://rainbowkit.com) - Learn how to customize your wallet connection flow.
-- [wagmi Documentation](https://wagmi.sh) - Learn how to interact with Ethereum.
-- [Next.js Documentation](https://nextjs.org/docs) - Learn how to build a Next.js application.
+### Gas Snapshots
 
-You can check out [the RainbowKit GitHub repository](https://github.com/rainbow-me/rainbowkit) - your feedback and contributions are welcome!
+```shell
+$ forge snapshot
+```
 
-## Deploy on Vercel
+### Anvil
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```shell
+$ anvil
+```
 
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+### Deploy
+
+```shell
+$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+```
+
+### Cast
+
+```shell
+$ cast <subcommand>
+```
+
+### Help
+
+```shell
+$ forge --help
+$ anvil --help
+$ cast --help
+```
