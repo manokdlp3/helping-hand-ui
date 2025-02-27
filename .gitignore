@@ -39,6 +39,3 @@ yarn-error.log*
 
 # cache folder
 .cache
-
-#lib folder
-lib/    
