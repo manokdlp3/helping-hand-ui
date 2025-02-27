@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+//Install openzeppelin v4.9.6
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 /**
  * @title FundraiserFactory
@@ -63,7 +64,7 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     /**
      * @param _usdcAddress Address of the USDC contract (6 decimals) on your target network (e.g., Sepolia).
      */
-    constructor(address _usdcAddress) Ownable(msg.sender) {
+    constructor(address _usdcAddress) Ownable() {
         require(_usdcAddress != address(0), "Invalid USDC address");
         usdcAddress = _usdcAddress;
     }
@@ -341,6 +342,8 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         
         return string(str);
     }
+
+
 
     /**
      * @notice Determines if a fundraiser is completed based on claimed amounts and end date
