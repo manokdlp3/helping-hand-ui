@@ -1,1 +1,1 @@
-testAddFundraiserWithInvalidEndDate|testGoalReachedStatus|testRecordDonationAfterEndDate|testRecordDonationWithInvalidAmount
+testGoalReachedStatus|testRecordDonation

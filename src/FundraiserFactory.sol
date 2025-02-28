@@ -1,70 +1,81 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.28;
 
 //Install openzeppelin v4.9.6
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import {IPool} from "./interfaces/IPool.sol";
+import {FundraiserStorage} from "./FundraiserStorage.sol";
+import {AaveHelpers} from "./AaveHelpers.sol";
+import {FundraiserLogic} from "./FundraiserLogic.sol";
+import {AdminFunctions} from "./AdminFunctions.sol";
+import {ViewFunctions} from "./ViewFunctions.sol";
+import {AaveFunctions} from "./AaveFunctions.sol";
+
+interface IAToken is IERC20 {
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+}
 
 /**
  * @title FundraiserFactory
- * @notice This contract allows creation of fundraisers (funding proposals) and tracking contributions in USDC.
+ * @notice This contract allows creation and management of fundraisers with USDC as the contribution token.
+ * @dev This is a thin proxy contract that delegates most functionality to library implementations.
  *
- * IMPORTANT:
- * - Users must approve this contract to spend their USDC before calling `recordDonation()`.
- *   This is done directly through the USDC contract, not through this contract.
- * - The contract uses `transferFrom` to pull tokens from the user's wallet into the contract.
- * - The contract uses `transfer` to send tokens out of its own balance during withdrawals.
- *
- * USDC on Sepolia (for example): 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+ * Sepolia Test Addresses:
+ * - USDC Address: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+ * - Aave Pool Address: 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
+ * - aUSDC Address: 0x16dA4541aD1807f4443d92D26044C1147406EB80
  */
-contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
+contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
-    
-    // Represents a fundraiser proposal
-    struct Fundraiser {
-        address owner;           
-        uint64 startDate;       // Using uint64 for timestamp to save gas
-        uint64 endDate;         // Using uint64 for timestamp to save gas 
-        string subject;          
-        string additionalDetails;
-        uint256 fundraiserGoal; // stored in base USDC units (6 decimals)
-        uint256 amountRaised;   // stored in base USDC units (6 decimals)
-        // isCompleted no longer stored - now derived from state
-        uint256 claimedAmount;  // track how much was withdrawn
-    }
-
-    // ID counter for newly created fundraisers
-    uint256 public fundraiserEventCounter;
-
-    // Address of the USDC token contract
-    address public immutable usdcAddress;
-    
-    // USDC decimal handling
-    uint8 private constant USDC_DECIMALS = 6;
-    uint256 private constant USDC_DECIMAL_FACTOR = 10**USDC_DECIMALS;
+    using ViewFunctions for FundraiserStorage.State;
+    using AaveFunctions for FundraiserStorage.State;
+    using AdminFunctions for FundraiserStorage.State;
+    using FundraiserLogic for FundraiserStorage.Fundraiser;
 
     // Events
-    event FundraiserCreated(
-        uint256 indexed fundraiserId,
-        address indexed owner,
-        uint64 endDate,
-        uint256 fundraiserGoal
-    );
-    event Deposit(address indexed user, uint256 indexed fundraiserId, uint256 amount);
+    event FundraiserCreated(uint256 indexed id, address indexed owner, uint256 goal);
+    event Deposit(address indexed user, uint256 indexed id, uint256 amt);
     event Withdrawal(address indexed user, uint256 indexed fundraiserId, uint256 amount);
     event EmergencyWithdrawal(address indexed owner, uint256 amount);
+    event EmergencyUserWithdrawal(address indexed user, uint256 indexed fundraiserId, uint256 amount);
+    event EmergencyReservePercentageUpdated(uint256 newPercentage);
+    event AaveEnabledStatusUpdated(bool enabled);
+    event AaveWithdrawalFailed(uint256 requestedAmount, string reason);
+    event AaveWithdrawal(uint256 amount, uint256 timestamp);
+    event YieldDistributed(address indexed recipient, uint256 amount, uint256 timestamp);
+    event EmergencyAaveWithdrawal(uint256 amount);
+    event EmergencyWithdrawalsStatusChanged(bool enabled);
+    event ContentAdded(bytes32 indexed contentHash, string description);
 
-    // Mappings
-    mapping(uint256 => Fundraiser) public idToFundraiserEvent; // ID -> Fundraiser data
-    mapping(address => mapping(uint256 => uint256)) public userContributions; // how much each user contributed to each fundraiser
+    // Create State variable for storage access
+    FundraiserStorage.State private state;
 
     /**
      * @param _usdcAddress Address of the USDC contract (6 decimals) on your target network (e.g., Sepolia).
+     * @param _aavePoolAddress Address of the Aave Pool contract.
+     * @param _aUsdcAddress Address of the aUSDC token contract.
+     *
+     * For Sepolia testing:
+     * _usdcAddress = 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8
+     * _aavePoolAddress = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
+     * _aUsdcAddress = 0x16dA4541aD1807f4443d92D26044C1147406EB22
      */
-    constructor(address _usdcAddress) Ownable() {
+    constructor(address _usdcAddress, address _aavePoolAddress, address _aUsdcAddress) Ownable(msg.sender) {
+        if (_usdcAddress == address(0)) revert InvalidAddress();
+        if (_aavePoolAddress == address(0)) revert InvalidAddress();
+        if (_aUsdcAddress == address(0)) revert InvalidAddress();
+
+        // Initialize state variables
+        state.usdcAddress = _usdcAddress;
+        state.aavePoolAddress = _aavePoolAddress;
+        state.aUsdcAddress = _aUsdcAddress;
+        state.USDC_DECIMAL_FACTOR = USDC_DECIMAL_FACTOR;
+        AaveFunctions.setEmergencyReservePercentage(state, 20);
+        AaveFunctions.setAaveEnabled(state, true);
         require(_usdcAddress != address(0), "Invalid USDC address");
         usdcAddress = _usdcAddress;
     }
@@ -72,32 +83,37 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     // -----------------------------
     //  ADMIN FUNCTIONS
     // -----------------------------
-    
+
     /**
      * @notice Pauses the contract, preventing donations and withdrawals
      */
     function pause() external onlyOwner {
         _pause();
     }
-    
+
     /**
      * @notice Unpauses the contract, allowing donations and withdrawals
      */
     function unpause() external onlyOwner {
         _unpause();
     }
-    
+
     /**
      * @notice Emergency function to withdraw all funds in case of critical issues
      * @param _recipient Address to receive the funds
      */
     function emergencyWithdraw(address _recipient) external onlyOwner {
-        require(_recipient != address(0), "Cannot withdraw to zero address");
-        
-        IERC20 usdc = IERC20(usdcAddress);
+        if (_recipient == address(0)) revert InvalidAddress();
+
+        // First withdraw everything from Aave if enabled
+        if (state.aaveEnabled && state.totalDeposited > 0) {
+            AaveFunctions.withdrawFromAave(state, state.totalDeposited);
+        }
+
+        IERC20 usdc = IERC20(state.usdcAddress);
         uint256 balance = usdc.balanceOf(address(this));
-        require(balance > 0, "No funds to withdraw");
-        
+        if (balance == 0) revert InvalidInput(1);
+
         usdc.safeTransfer(_recipient, balance);
         emit EmergencyWithdrawal(_recipient, balance);
     }
@@ -105,173 +121,359 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     // -----------------------------
     //  CREATE A FUNDRAISER
     // -----------------------------
+    /**
+     * @notice Adds a new fundraiser to the platform
+     * @dev Creates a new fundraiser with the caller as owner. Stores content hashes and the actual
+     *      content in the registry for efficient on-chain storage.
+     * @param _endDate Timestamp when the fundraiser will end (must be in the future)
+     * @param _subject Title or subject of the fundraiser
+     * @param _additionalDetails Detailed description of the fundraiser
+     * @param _initialAmountNeeded Target goal in normal USDC units (e.g., 1000 = 1000 USDC)
+     */
     function addFundraiser(
-        uint64 _endDate, 
-        string calldata _subject, 
-        string calldata _additionalDetails, 
-        uint256 _initialAmountNeeded // in normal USDC units (e.g., 10 means 10 USDC)
+        uint64 _endDate,
+        string calldata _subject,
+        string calldata _additionalDetails,
+        uint256 _initialAmountNeeded
     ) external whenNotPaused {
-        require(_endDate > block.timestamp, "End date must be in the future");
-        require(_initialAmountNeeded > 0, "Initial amount needed must be > 0");
-        
-        // Convert to base units with overflow protection (Solidity 0.8.x has built-in checks)
-        uint256 baseUnitsNeeded = _initialAmountNeeded * USDC_DECIMAL_FACTOR;
-        
-        uint256 fundraiserId = fundraiserEventCounter++;
-        
-        idToFundraiserEvent[fundraiserId] = Fundraiser({
+        if (_endDate <= block.timestamp) revert FundingPeriodEnded();
+        if (_initialAmountNeeded == 0) revert InvalidInput(2);
+
+        // Convert to base units with overflow protection
+        uint256 baseUnitsNeeded = _initialAmountNeeded * state.USDC_DECIMAL_FACTOR;
+        if (baseUnitsNeeded > type(uint128).max) revert InvalidInput(2);
+
+        // Create hashes for storage efficiency
+        bytes32 subjectHash = FundraiserLogic.createHash(_subject);
+        bytes32 detailsHash = FundraiserLogic.createHash(_additionalDetails);
+
+        uint256 fundraiserId = state.fundraiserEventCounter++;
+
+        state.idToFundraiserEvent[fundraiserId] = Fundraiser({
             owner: msg.sender,
             startDate: uint64(block.timestamp),
             endDate: _endDate,
-            subject: _subject,
-            additionalDetails: _additionalDetails,
-            fundraiserGoal: baseUnitsNeeded,
-            amountRaised: 0,
-            claimedAmount: 0
+            fundraiserGoal: uint128(baseUnitsNeeded),
+            amountRaised: uint128(0),
+            claimedAmount: uint128(0),
+            reserved: bytes16(0),
+            subjectHash: subjectHash,
+            detailsHash: detailsHash
         });
 
-        emit FundraiserCreated(fundraiserId, msg.sender, _endDate, baseUnitsNeeded);
+        // Store the actual content in the registry
+        state.contentRegistry[subjectHash] = _subject;
+        state.contentRegistry[detailsHash] = _additionalDetails;
+
+        emit FundraiserCreated(fundraiserId, msg.sender, baseUnitsNeeded);
     }
 
     // -----------------------------
     //  RECORD A DEPOSIT
     // -----------------------------
     /**
-     * @dev This function uses `transferFrom` to pull USDC directly from the user's wallet.
-     *      IMPORTANT: The user must first approve this contract to spend their USDC by
-     *      calling the approve() function on the USDC contract directly.
-     * @param _fundraiserId ID of the fundraiser to fund.
-     * @param _amount The USDC amount in normal units (e.g., 5 => 5 USDC). 
+     * @notice Record a donation to a fundraiser
+     * @dev Transfers USDC from user to contract, updates accounting, and deposits to Aave if enabled.
+     *      Uses Checks-Effects-Interactions pattern for security.
+     * @param _fundraiserId ID of the fundraiser to donate to
+     * @param _amount Amount to donate in normal USDC units (e.g., 10 = 10 USDC)
      */
     function recordDonation(uint256 _fundraiserId, uint256 _amount) external nonReentrant whenNotPaused {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        require(_amount > 0, "Amount must be greater than 0");
-        
-        Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
-        
+        if (_fundraiserId >= state.fundraiserEventCounter) revert InvalidInput(1);
+        if (_amount == 0) revert InvalidInput(2);
+        if (msg.sender == address(0)) revert InvalidAddress();
+
+        Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
+
         // Ensure the funding window is still open and fundraiser is not completed
-        require(block.timestamp <= theFundraiser.endDate, "Funding period has ended");
-        require(!isFundraiserCompleted(_fundraiserId), "Fundraiser is completed");
+        if (block.timestamp > theFundraiser.endDate) revert FundingPeriodEnded();
+        if (FundraiserLogic.isFundraiserCompleted(theFundraiser)) revert InvalidInput(3);
 
         // Convert deposit to base units
-        uint256 depositInBaseUnits = _amount * USDC_DECIMAL_FACTOR;
-        
+        uint256 depositInBaseUnits = _amount * state.USDC_DECIMAL_FACTOR;
+        if (uint256(theFundraiser.amountRaised) + depositInBaseUnits > type(uint128).max) revert InvalidInput(2);
+
         // Update contract's internal accounting (Checks-Effects pattern)
-        userContributions[msg.sender][_fundraiserId] += depositInBaseUnits;
-        theFundraiser.amountRaised += depositInBaseUnits;
-        
+        state.userContributions[msg.sender][_fundraiserId] += depositInBaseUnits;
+        theFundraiser.amountRaised += uint128(depositInBaseUnits);
+
         // Transfer USDC from the user to this contract (Interactions pattern)
-        IERC20(usdcAddress).safeTransferFrom(msg.sender, address(this), depositInBaseUnits);
-        
+        IERC20(state.usdcAddress).safeTransferFrom(msg.sender, address(this), depositInBaseUnits);
+
         emit Deposit(msg.sender, _fundraiserId, depositInBaseUnits);
+
+        // Deposit to Aave if enabled
+        if (state.aaveEnabled) {
+            AaveFunctions.depositToAave(state, address(this));
+        }
     }
 
     // -----------------------------
     //  WITHDRAW FUNDS (OWNER)
     // -----------------------------
     /**
-     * @notice The owner of a fundraiser can withdraw from its balance, but only if:
-     *         1. The fundraiser has reached its goal, OR
-     *         2. The fundraiser end date has passed
-     * @param _fundraiserId The ID of the fundraiser.
-     * @param _amount The amount in normal USDC units to withdraw.
+     * @notice Withdraw funds from a fundraiser (for fundraiser owners)
+     * @dev Owner can withdraw only if goal is reached OR funding period has ended.
+     *      Uses Checks-Effects-Interactions pattern for security.
+     * @param _fundraiserId ID of the fundraiser to withdraw from
+     * @param _amount Amount to withdraw in normal USDC units
      */
     function withdraw(uint256 _fundraiserId, uint256 _amount) external nonReentrant whenNotPaused {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        require(_amount > 0, "Amount must be > 0");
+        if (_fundraiserId >= state.fundraiserEventCounter) revert InvalidInput(1);
+        if (_amount == 0) revert InvalidInput(2);
 
-        Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
-        require(theFundraiser.owner == msg.sender, "Only owner can withdraw");
-        
+        Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
+        if (theFundraiser.owner != msg.sender) revert InvalidInput(2);
+
         // Calculate if goal reached
         bool goalReached = theFundraiser.amountRaised >= theFundraiser.fundraiserGoal;
-        
+
         // Owner can withdraw only if goal reached OR funding period ended
-        require(
-            goalReached || block.timestamp > theFundraiser.endDate,
-            "Cannot withdraw: goal not reached or still active"
-        );
-        
+        if (!goalReached && block.timestamp <= theFundraiser.endDate) {
+            revert WithdrawalConditionsNotMet();
+        }
+
         // Check if there's enough unclaimed balance
-        uint256 withdrawAmount = _amount * USDC_DECIMAL_FACTOR;
+        uint256 withdrawAmount = _amount * state.USDC_DECIMAL_FACTOR;
         uint256 availableToWithdraw = theFundraiser.amountRaised - theFundraiser.claimedAmount;
-        require(availableToWithdraw >= withdrawAmount, "Not enough in fundraiser balance");
+        if (availableToWithdraw < withdrawAmount) revert InvalidInput(5);
 
-        // Update state before external calls (Checks-Effects pattern)
-        theFundraiser.claimedAmount += withdrawAmount;
+        // Check if we need to withdraw from Aave
+        uint256 contractBalance = IERC20(state.usdcAddress).balanceOf(address(this));
+        if (contractBalance < withdrawAmount) {
+            uint256 amountToWithdrawFromAave = withdrawAmount - contractBalance;
+            AaveFunctions.withdrawFromAave(state, amountToWithdrawFromAave);
 
-        // Transfer from this contract's USDC balance to the owner (Interactions pattern)
-        IERC20(usdcAddress).safeTransfer(msg.sender, withdrawAmount);
+            // Check if we have enough after withdrawal
+            contractBalance = IERC20(state.usdcAddress).balanceOf(address(this));
+            if (contractBalance < withdrawAmount) revert InvalidInput(2);
+        }
+
+        // Process the withdrawal
+        FundraiserLogic.processWithdrawal(theFundraiser, withdrawAmount, msg.sender, state.usdcAddress);
 
         emit Withdrawal(msg.sender, _fundraiserId, withdrawAmount);
     }
 
     // -----------------------------
-    //  VIEW FUNCTIONS
+    //  DELEGATED FUNCTIONS
     // -----------------------------
+
+    // View Functions
     /**
      * @notice Get the total USDC (in normal USDC units) stored in this contract.
      */
     function getContractBalance() external view returns (uint256) {
-        uint256 baseUnits = IERC20(usdcAddress).balanceOf(address(this));
-        return baseUnits / USDC_DECIMAL_FACTOR;
+        return state.getContractBalance();
     }
 
     /**
      * @notice Get the USDC balance (in normal USDC units) for a specific fundraiser.
      */
     function getBalanceOfFundraiser(uint256 _fundraiserId) external view returns (uint256) {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        return idToFundraiserEvent[_fundraiserId].amountRaised / USDC_DECIMAL_FACTOR;
+        return state.getBalanceOfFundraiser(_fundraiserId);
     }
 
     /**
      * @notice How much has a user contributed to a specific fundraiser (in normal units)?
      */
     function getUserContribution(address _user, uint256 _fundraiserId) external view returns (uint256) {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        return userContributions[_user][_fundraiserId] / USDC_DECIMAL_FACTOR;
+        return state.getUserContribution(_user, _fundraiserId);
     }
 
     /**
      * @notice Returns the entire `Fundraiser` struct for a given _fundraiserId,
      *         with amounts converted to normal USDC units (instead of base units).
      */
-    function getFundraiser(uint256 _fundraiserId) external view returns (
-        address owner,
-        uint256 startDate,
-        uint256 endDate,
-        string memory subject,
-        string memory additionalDetails,
-        uint256 fundraiserGoal,
-        uint256 amountRaised,
-        bool isCompleted,
-        bool goalReached
-    ) {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        Fundraiser storage fundraiser = idToFundraiserEvent[_fundraiserId];
-        
-        bool hasReachedGoal = fundraiser.amountRaised >= fundraiser.fundraiserGoal;
-        
-        return (
-            fundraiser.owner,
-            fundraiser.startDate,
-            fundraiser.endDate,
-            fundraiser.subject,
-            fundraiser.additionalDetails,
-            fundraiser.fundraiserGoal / USDC_DECIMAL_FACTOR,
-            fundraiser.amountRaised / USDC_DECIMAL_FACTOR,
-            isFundraiserCompleted(_fundraiserId),
-            hasReachedGoal
-        );
+    function getFundraiser(uint256 _fundraiserId)
+        external
+        view
+        returns (address, uint256, uint256, string memory, string memory, uint256, uint256, bool, bool)
+    {
+        return state.getFundraiser(_fundraiserId);
     }
-    
+
     /**
      * @notice Helper to convert a normal USDC amount to base units (6 decimals).
      * @param _amount Normal USDC units, e.g. 10 => 10 USDC => 10,000,000 base units
      */
-    function getAmountInBaseUnits(uint256 _amount) external pure returns (uint256) {
-        return _amount * USDC_DECIMAL_FACTOR;
+    function getAmountInBaseUnits(uint256 _amount) external view returns (uint256) {
+        return _amount * state.USDC_DECIMAL_FACTOR;
+    }
+
+    // -----------------------------
+    //  AAVE INTEGRATION FUNCTIONS
+    // -----------------------------
+
+    /**
+     * @notice Calculate the available yield (in normal USDC units)
+     * @return Available yield
+     */
+    function getAvailableYield() public view returns (uint256) {
+        if (!state.aaveEnabled) return 0;
+
+        return AaveHelpers.getAvailableYield(state.aUsdcAddress, address(this), state.totalDeposited)
+            / state.USDC_DECIMAL_FACTOR;
+    }
+
+    /**
+     * @notice Distributes yield generated from Aave deposits to a recipient
+     * @dev Withdraws from Aave but doesn't reduce totalDeposited, creating an accounting difference
+     *      that represents the yield. Only callable by contract owner.
+     * @param _recipient Address to receive the yield
+     * @param _amount Amount of yield to distribute in normal USDC units
+     */
+    function distributeYield(address _recipient, uint256 _amount) external onlyOwner nonReentrant {
+        if (_recipient == address(0)) revert InvalidAddress();
+        if (_amount == 0) revert InvalidInput(2);
+
+        if (!AaveFunctions.distributeYield(state, _recipient, _amount)) revert InvalidInput(7);
+        emit YieldDistributed(_recipient, _amount, block.timestamp);
+    }
+
+    /**
+     * @notice Enable or disable Aave integration
+     * @param _enabled Whether Aave integration is enabled
+     */
+    function setAaveEnabled(bool _enabled) external onlyOwner {
+        AaveFunctions.setAaveEnabled(state, _enabled);
+        emit AaveEnabledStatusUpdated(_enabled);
+    }
+
+    /**
+     * @notice Update the emergency reserve percentage
+     * @param _newPercentage New percentage (0-100)
+     */
+    function setEmergencyReservePercentage(uint256 _newPercentage) external onlyOwner {
+        if (_newPercentage > 100) revert InvalidInput(4);
+        AaveFunctions.setEmergencyReservePercentage(state, _newPercentage);
+        emit EmergencyReservePercentageUpdated(_newPercentage);
+    }
+
+    /**
+     * @notice Emergency function to withdraw all funds from Aave
+     * @dev Uses multiple strategies to attempt recovery of funds in case of Aave issues.
+     *      Updates internal accounting based on actual amounts withdrawn.
+     */
+    function emergencyWithdrawFromAave() external onlyOwner nonReentrant {
+        uint256 amount = AaveFunctions.emergencyWithdrawFromAave(state);
+        emit EmergencyAaveWithdrawal(amount);
+    }
+
+    // -----------------------------
+    //  EMERGENCY USER WITHDRAWAL
+    // -----------------------------
+    /**
+     * @notice Allows users to perform emergency withdrawals of their contributions
+     * @dev Works even when the contract is paused if emergencyWithdrawalsEnabled is true
+     * @param _fundraiserId ID of the fundraiser to withdraw from
+     */
+    function emergencyUserWithdraw(uint256 _fundraiserId) external nonReentrant {
+        // This function works even when paused if emergencyWithdrawalsEnabled is true
+        if (paused() && !state.emergencyWithdrawalsEnabled) revert InvalidInput(6);
+        if (_fundraiserId >= state.fundraiserEventCounter) revert InvalidInput(1);
+
+        Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
+
+        // Use the FundraiserLogic library to process withdrawal
+        uint256 withdrawAmount =
+            FundraiserLogic.processEmergencyUserWithdraw(theFundraiser, state, msg.sender, _fundraiserId);
+
+        if (withdrawAmount == 0) revert InvalidInput(5);
+
+        // Check if we need to withdraw from Aave
+        uint256 contractBalance = IERC20(state.usdcAddress).balanceOf(address(this));
+        if (contractBalance < withdrawAmount) {
+            uint256 amountToWithdrawFromAave = withdrawAmount - contractBalance;
+            AaveFunctions.withdrawFromAave(state, amountToWithdrawFromAave);
+
+            // Check if we have enough after withdrawal
+            contractBalance = IERC20(state.usdcAddress).balanceOf(address(this));
+            if (contractBalance < withdrawAmount) {
+                // If not enough funds, adjust the withdrawal amount
+                withdrawAmount = contractBalance;
+            }
+        }
+
+        // Transfer funds
+        IERC20(state.usdcAddress).safeTransfer(msg.sender, withdrawAmount);
+
+        emit EmergencyUserWithdrawal(msg.sender, _fundraiserId, withdrawAmount);
+    }
+
+    // -----------------------------
+    //  VIEW FUNCTIONS
+    // -----------------------------
+    /**
+     * @notice Batch retrieval of multiple fundraisers for efficient data loading
+     * @dev Limits batch size to prevent out-of-gas errors.
+     *      Useful for frontends and UIs that need to display multiple fundraisers.
+     * @param _fromId Starting fundraiser ID
+     * @param _count Maximum number of fundraisers to return (capped at 50)
+     * @return response A BatchResponse struct containing arrays of fundraiser data:
+     *         owners, startDates, endDates, subjectHashes, detailsHashes,
+     *         fundraiserGoals, amountsRaised, areCompleted, goalsReached
+     */
+    function batchGetFundraisers(uint256 _fromId, uint256 _count) external view returns (BatchResponse memory) {
+        return state.batchGetFundraisers(_fromId, _count);
+    }
+
+    /**
+     * @notice Check contract status - combines multiple status checks in one call
+     * @return isPaused Whether the contract is currently paused
+     * @return isAaveEnabled Whether Aave integration is currently enabled
+     * @return isEmergencyWithdrawalEnabled Whether emergency withdrawals are enabled
+     * @return reservePercentage Current emergency reserve percentage
+     * @return totalDeposits Total USDC deposited to Aave (in normal units)
+     * @return contractUsdcBalance Current USDC balance in contract (in normal units)
+     * @return availableYield Available yield that can be distributed (in normal units)
+     * @return isAccountingSafe Whether our internal accounting matches Aave balances
+     */
+    function getContractStatus()
+        external
+        view
+        returns (
+            bool isPaused,
+            bool isAaveEnabled,
+            bool isEmergencyWithdrawalEnabled,
+            uint256 reservePercentage,
+            uint256 totalDeposits,
+            uint256 contractUsdcBalance,
+            uint256 availableYield,
+            bool isAccountingSafe
+        )
+    {
+        // Using named return values to avoid stack depth issues
+        isPaused = paused();
+        return _getContractStatusInternal(isPaused);
+    }
+
+    /**
+     * @dev Internal helper to avoid stack depth issues in getContractStatus
+     */
+    function _getContractStatusInternal(bool isPaused)
+        private
+        view
+        returns (bool, bool, bool, uint256, uint256, uint256, uint256, bool)
+    {
+        // Get basic status info first
+        (, bool isAaveEnabled, bool isEmergencyWithdrawalEnabled, uint256 reservePercentage) =
+            state.getContractStatusBasic(isPaused);
+
+        // Then get balance info
+        (uint256 totalDeposits, uint256 contractUsdcBalance, uint256 availableYield, bool isAccountingSafe) =
+            state.getContractStatusBalances();
+
+        return (
+            isPaused,
+            isAaveEnabled,
+            isEmergencyWithdrawalEnabled,
+            reservePercentage,
+            totalDeposits,
+            contractUsdcBalance,
+            availableYield,
+            isAccountingSafe
+        );
     }
 
     // -----------------------------
@@ -283,7 +485,7 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
      * @return The amount of USDC this contract is allowed to spend on behalf of msg.sender
      */
     function checkAllowance() external view returns (uint256) {
-        IERC20 usdc = IERC20(usdcAddress);
+        IERC20 usdc = IERC20(state.usdcAddress);
         return usdc.allowance(msg.sender, address(this));
     }
 
@@ -292,7 +494,7 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
      * @return The address of the USDC contract used by this FundraiserFactory
      */
     function getUSDCAddress() external view returns (address) {
-        return usdcAddress;
+        return state.usdcAddress;
     }
 
     /**
@@ -300,98 +502,70 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
      * @param _amount Example amount in normal USDC units that would need approval
      * @return The amount in base units that should be used in the USDC approve() call
      */
-    function getApprovalAmount(uint256 _amount) external pure returns (uint256) {
-        return _amount * USDC_DECIMAL_FACTOR;
+    function getApprovalAmount(uint256 _amount) external view returns (uint256) {
+        return _amount * state.USDC_DECIMAL_FACTOR;
     }
-    
+
     /**
      * @notice Provides instructions on how to approve USDC for this contract
      * @return Instructions on how to perform the approval in Remix
      */
     function getApprovalInstructions() external view returns (string memory) {
-        return string(abi.encodePacked(
-            "To approve USDC spending in Remix:\n",
-            "1. Go to the 'Deploy & Run' tab\n",
-            "2. Select 'IERC20' from the contract dropdown\n",
-            "3. Enter USDC address: ", addressToString(usdcAddress), "\n",
-            "4. Click 'At Address' to load the USDC contract\n",
-            "5. Find the 'approve' function\n",
-            "6. Enter this contract's address: ", addressToString(address(this)), "\n",
-            "7. Enter amount with 6 decimals (e.g. 10 USDC = 10000000)\n",
-            "8. Click 'transact' to approve"
-        ));
-    }
-    
-    /**
-     * @notice Helper function to convert an address to a string
-     * @param _addr The address to convert
-     * @return The string representation of the address
-     */
-    function addressToString(address _addr) internal pure returns (string memory) {
-        bytes32 value = bytes32(uint256(uint160(_addr)));
-        bytes memory alphabet = "0123456789abcdef";
-        
-        bytes memory str = new bytes(42);
-        str[0] = "0";
-        str[1] = "x";
-        
-        for (uint256 i = 0; i < 20; i++) {
-            str[2 + i * 2] = alphabet[uint8(value[i + 12] >> 4)];
-            str[3 + i * 2] = alphabet[uint8(value[i + 12] & 0x0f)];
-        }
-        
-        return string(str);
-    }
-
-
-
-    /**
-     * @notice Determines if a fundraiser is completed based on claimed amounts and end date
-     * @param _fundraiserId The ID of the fundraiser to check
-     * @return True if the fundraiser is completed
-     */
-    function isFundraiserCompleted(uint256 _fundraiserId) public view returns (bool) {
-        Fundraiser storage fundraiser = idToFundraiserEvent[_fundraiserId];
-        
-        // A fundraiser is completed when all funds have been claimed AND there were funds raised
-        if (fundraiser.amountRaised > 0 && fundraiser.claimedAmount >= fundraiser.amountRaised) {
-            return true;
-        }
-        
-        // Or if the fundraiser end date has passed and the goal wasn't reached
-        if (block.timestamp > fundraiser.endDate && 
-            fundraiser.amountRaised < fundraiser.fundraiserGoal) {
-            return true;
-        }
-        
-        return false;
+        return string(
+            abi.encodePacked(
+                "To approve USDC spending in Remix:\n",
+                "1. Go to the 'Deploy & Run' tab\n",
+                "2. Select 'IERC20' from the contract dropdown\n",
+                "3. Enter USDC address: ",
+                FundraiserLogic.addressToString(state.usdcAddress),
+                "\n",
+                "4. Click 'At Address' to load the USDC contract\n",
+                "5. Find the 'approve' function\n",
+                "6. Enter this contract's address: ",
+                FundraiserLogic.addressToString(address(this)),
+                "\n",
+                "7. Enter amount with 6 decimals (e.g. 10 USDC = 10000000)\n",
+                "8. Click 'transact' to approve"
+            )
+        );
     }
 
     /**
-     * @notice Manually mark a fundraiser as completed by withdrawing remaining funds
-     * @param _fundraiserId The ID of the fundraiser to complete
+     * @notice Checks if a user can perform an emergency withdrawal for a specific fundraiser
+     * @param _fundraiserId ID of the fundraiser to check
+     * @param _user Address of the user to check withdrawal eligibility for
+     * @return possible Whether the user can withdraw
+     * @return maxAmount Maximum amount the user can withdraw in normal USDC units
      */
-    function completeFundraiser(uint256 _fundraiserId) external nonReentrant whenNotPaused {
-        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
-        
-        Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
-        require(theFundraiser.owner == msg.sender, "Only owner can complete fundraiser");
-        require(!isFundraiserCompleted(_fundraiserId), "Fundraiser already completed");
-        
-        // Calculate remaining funds to withdraw
-        uint256 remainingFunds = theFundraiser.amountRaised - theFundraiser.claimedAmount;
-        
-        // If there are remaining funds, withdraw them
-        if (remainingFunds > 0) {
-            // Update state before transfer
-            theFundraiser.claimedAmount = theFundraiser.amountRaised;
-            
-            // Transfer remaining funds
-            IERC20(usdcAddress).safeTransfer(msg.sender, remainingFunds);
-            emit Withdrawal(msg.sender, _fundraiserId, remainingFunds);
-        } else {
-            // Just mark as completed by setting claimed amount equal to raised
-            theFundraiser.claimedAmount = theFundraiser.amountRaised;
-        }
+    function canPerformEmergencyWithdrawal(uint256 _fundraiserId, address _user)
+        external
+        view
+        returns (bool possible, uint256 maxAmount)
+    {
+        if (_fundraiserId >= state.fundraiserEventCounter) revert InvalidInput(1);
+
+        Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
+        return FundraiserLogic.canPerformEmergencyWithdrawal(theFundraiser, state, _user, _fundraiserId);
+    }
+
+    /**
+     * @notice Registers content in the on-chain registry by its hash
+     * @dev Used for efficient storage of fundraiser details. Only owner can register content
+     *      to prevent spam or malicious content.
+     * @param _hash The hash of the content (usually keccak256 hash)
+     * @param _content The actual content string to store
+     */
+    function registerContent(bytes32 _hash, string calldata _content) external onlyOwner {
+        state.contentRegistry[_hash] = _content;
+        emit ContentAdded(_hash, _content);
+    }
+
+    /**
+     * @notice Set whether emergency user withdrawals are enabled even during pause
+     * @param _enabled Whether emergency withdrawals are enabled
+     */
+    function setEmergencyWithdrawalsEnabled(bool _enabled) external onlyOwner {
+        AdminFunctions.setEmergencyWithdrawalsEnabled(state, _enabled);
+        emit EmergencyWithdrawalsStatusChanged(_enabled);
     }
 }
