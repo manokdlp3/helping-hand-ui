@@ -17,16 +17,14 @@ library AaveHelpers {
      * @param onBehalfOf The address that will receive the aTokens
      * @return success Whether the deposit was successful
      */
-    function depositToAave(
-        address usdcAddress, 
-        address aavePoolAddress, 
-        uint256 amountToDeposit,
-        address onBehalfOf
-    ) internal returns (bool success) {
+    function depositToAave(address usdcAddress, address aavePoolAddress, uint256 amountToDeposit, address onBehalfOf)
+        internal
+        returns (bool success)
+    {
         // Reset approval and approve
         if (!IERC20(usdcAddress).approve(aavePoolAddress, 0)) return false;
         if (!IERC20(usdcAddress).approve(aavePoolAddress, amountToDeposit)) return false;
-        
+
         // try/catch for the actual Aave call
         try IPool(aavePoolAddress).supply(usdcAddress, amountToDeposit, onBehalfOf, 0) {
             return true;
@@ -34,7 +32,7 @@ library AaveHelpers {
             return false;
         }
     }
-    
+
     /**
      * @notice Withdraw USDC from Aave
      * @param usdcAddress The address of the USDC token
@@ -43,39 +41,33 @@ library AaveHelpers {
      * @param to The address that will receive the underlying asset
      * @return withdrawnAmount The amount that was successfully withdrawn
      */
-    function withdrawFromAave(
-        address usdcAddress,
-        address aavePoolAddress,
-        uint256 amountToWithdraw,
-        address to
-    ) internal returns (uint256 withdrawnAmount) {
-        try IPool(aavePoolAddress).withdraw(
-            usdcAddress,
-            amountToWithdraw,
-            to
-        ) returns (uint256 amount) {
+    function withdrawFromAave(address usdcAddress, address aavePoolAddress, uint256 amountToWithdraw, address to)
+        internal
+        returns (uint256 withdrawnAmount)
+    {
+        try IPool(aavePoolAddress).withdraw(usdcAddress, amountToWithdraw, to) returns (uint256 amount) {
             return amount;
         } catch {
             return 0;
         }
     }
-    
+
     /**
      * @notice Calculate amount to deposit to Aave based on contract balance and reserve percentage
      */
-    function calculateDepositAmount(
-        address usdcAddress,
-        address contractAddress,
-        uint256 emergencyReservePercentage
-    ) internal view returns (uint256) {
+    function calculateDepositAmount(address usdcAddress, address contractAddress, uint256 emergencyReservePercentage)
+        internal
+        view
+        returns (uint256)
+    {
         uint256 contractBalance = IERC20(usdcAddress).balanceOf(contractAddress);
         uint256 reserveAmount = (contractBalance * emergencyReservePercentage) / 100;
         uint256 amountToDeposit = contractBalance > reserveAmount ? contractBalance - reserveAmount : 0;
-        
+
         // Only deposit if amount is significant to save gas
         return amountToDeposit < 1000 ? 0 : amountToDeposit;
     }
-    
+
     /**
      * @notice Try to get aToken balance securely
      */
@@ -90,15 +82,15 @@ library AaveHelpers {
     /**
      * @notice Вычисляет доступный доход (в базовых единицах)
      */
-    function getAvailableYield(
-        address aUsdcAddress,
-        address contractAddress,
-        uint256 totalDeposited
-    ) internal view returns (uint256) {
+    function getAvailableYield(address aUsdcAddress, address contractAddress, uint256 totalDeposited)
+        internal
+        view
+        returns (uint256)
+    {
         try IERC20(aUsdcAddress).balanceOf(contractAddress) returns (uint256 aUsdcBalance) {
             // Если баланс aUSCT меньше общего депозита (возможно при убытках), вернуть 0
             if (aUsdcBalance <= totalDeposited) return 0;
-            
+
             return (aUsdcBalance - totalDeposited);
         } catch {
             return 0;
@@ -116,7 +108,7 @@ library AaveHelpers {
     ) internal view returns (uint256 internalBalance, uint256 aaveBalance, int256 difference) {
         internalBalance = totalDeposited;
         aaveBalance = 0;
-        
+
         if (aaveEnabled) {
             try IERC20(aUsdcAddress).balanceOf(contractAddress) returns (uint256 aUsdcBalance) {
                 aaveBalance = aUsdcBalance;
@@ -125,14 +117,14 @@ library AaveHelpers {
                 return (internalBalance, 0, -int256(internalBalance));
             }
         }
-        
+
         // Вычисляем разницу (может быть отрицательной, если мы потеряли ценность)
         if (aaveBalance >= internalBalance) {
             difference = int256(aaveBalance - internalBalance);
         } else {
             difference = -int256(internalBalance - aaveBalance);
         }
-        
+
         return (internalBalance, aaveBalance, difference);
     }
-} 
+}

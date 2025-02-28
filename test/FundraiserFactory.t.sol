@@ -12,33 +12,29 @@ contract FundraiserFactoryTest is Test {
     MockAavePool public mockAavePool;
     MockAUSDC public mockAUSDC;
     uint256 constant USDC_DECIMALS = 6;
-    
+
     function setUp() public {
         owner = address(this);
-        
+
         // Создаем мок USDC напрямую
         mockUSDC = new MockUSDCWithTransfer();
-        
+
         // Создаем мок Aave Pool и aUSDC
         mockAavePool = new MockAavePool();
         mockAUSDC = new MockAUSDC();
-        
+
         // Устанавливаем баланс для тестового аккаунта
-        mockUSDC.setBalance(address(this), 1000000 * 10**USDC_DECIMALS);
-        
+        mockUSDC.setBalance(address(this), 1000000 * 10 ** USDC_DECIMALS);
+
         // Проверяем, что баланс установлен правильно
         console.log("Initial balance:", mockUSDC.balanceOf(address(this)));
-        
+
         // Даем разрешение контракту на использование USDC
         vm.startPrank(address(this));
         mockUSDC.approve(address(this), type(uint256).max);
         vm.stopPrank();
-        
-        fundraiserFactory = new FundraiserFactory(
-            address(mockUSDC),
-            address(mockAavePool),
-            address(mockAUSDC)
-        );
+
+        fundraiserFactory = new FundraiserFactory(address(mockUSDC), address(mockAavePool), address(mockAUSDC));
     }
 
     function testAddFundraiser() public {
@@ -47,23 +43,18 @@ contract FundraiserFactoryTest is Test {
         uint64 endDate = uint64(block.timestamp + 7 days);
         uint256 goal = 1000; // 1000 USDC (без учета десятичных знаков)
 
-        fundraiserFactory.addFundraiser(
-            endDate,
-            subject,
-            details,
-            goal
-        );
+        fundraiserFactory.addFundraiser(endDate, subject, details, goal);
 
         // Get the fundraiser details
         (
             address fOwner,
-            ,  // startDate
+            , // startDate
             uint256 fEndDate,
             string memory fSubject,
             string memory fDetails,
             uint256 fGoal,
             uint256 amountRaised,
-            ,  // isCompleted
+            , // isCompleted
             bool goalReached
         ) = fundraiserFactory.getFundraiser(0);
 
@@ -81,38 +72,28 @@ contract FundraiserFactoryTest is Test {
         // Use a safe way to get past timestamp to avoid underflow
         vm.warp(1000000); // Start at a known timestamp
         uint64 pastEndDate = uint64(block.timestamp - 1 days);
-        
+
         vm.expectRevert(FundraiserStorage.FundingPeriodEnded.selector);
-        fundraiserFactory.addFundraiser(
-            pastEndDate,
-            "Test Fundraiser",
-            "Test description",
-            1000
-        );
+        fundraiserFactory.addFundraiser(pastEndDate, "Test Fundraiser", "Test description", 1000);
     }
 
     function testRecordDonation() public {
         // Start at a known timestamp
         vm.warp(1000000);
-        
+
         // Create a fundraiser with a definite future end date
         uint64 endDate = uint64(block.timestamp + 7 days);
         uint256 fundraiserGoal = 1000; // 1000 USDC (без учета десятичных знаков)
-        
-        fundraiserFactory.addFundraiser(
-            endDate,
-            "Test Fundraiser",
-            "Test description",
-            fundraiserGoal
-        );
+
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", fundraiserGoal);
 
         // Get fundraiser details and verify state
         (
-            ,  // fOwner
-            ,  // startDate
+            , // fOwner
+            , // startDate
             uint256 fEndDate,
-            ,  // subject
-            ,  // details
+            , // subject
+            , // details
             uint256 fGoal,
             uint256 amountRaised,
             bool isCompleted,
@@ -125,21 +106,21 @@ contract FundraiserFactoryTest is Test {
         assertEq(amountRaised, 0, "Should start with 0 raised");
         assertEq(goalReached, false, "Goal should not be reached");
         assertEq(isCompleted, false, "Should not be completed");
-        
+
         // Проверяем баланс и разрешение
         console.log("Balance before:", mockUSDC.balanceOf(address(this)));
         console.log("Allowance:", mockUSDC.allowance(address(this), address(fundraiserFactory)));
-        
+
         // Даем разрешение контракту на использование USDC
         vm.startPrank(address(this));
         mockUSDC.approve(address(fundraiserFactory), type(uint256).max);
         vm.stopPrank();
-        
+
         console.log("Allowance after approve:", mockUSDC.allowance(address(this), address(fundraiserFactory)));
-        
+
         // Make donation (100 USDC)
         uint256 donationAmount = 100;
-        
+
         fundraiserFactory.recordDonation(0, donationAmount);
 
         // Check the donation was recorded
@@ -148,12 +129,7 @@ contract FundraiserFactoryTest is Test {
 
     function testRecordDonationWithInvalidAmount() public {
         uint64 endDate = uint64(block.timestamp + 7 days);
-        fundraiserFactory.addFundraiser(
-            endDate,
-            "Test Fundraiser",
-            "Test description",
-            1000
-        );
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", 1000);
 
         // Обновлено для соответствия текущей ошибке в контракте
         vm.expectRevert(abi.encodeWithSelector(FundraiserStorage.InvalidInput.selector, 2));
@@ -163,12 +139,7 @@ contract FundraiserFactoryTest is Test {
     function testRecordDonationAfterEndDate() public {
         // Create fundraiser
         uint64 endDate = uint64(block.timestamp + 7 days);
-        fundraiserFactory.addFundraiser(
-            endDate,
-            "Test Fundraiser",
-            "Test description",
-            1000
-        );
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", 1000);
 
         // Warp time to after end date
         vm.warp(endDate + 1);
@@ -180,28 +151,25 @@ contract FundraiserFactoryTest is Test {
 
     function testGoalReachedStatus() public {
         uint256 fundraiserGoal = 1000; // 1000 USDC (без учета десятичных знаков)
-        
+
         // Start at a known timestamp
         vm.warp(1000000);
-        
+
         fundraiserFactory.addFundraiser(
-            uint64(block.timestamp + 7 days),
-            "Test Fundraiser",
-            "Test description",
-            fundraiserGoal
+            uint64(block.timestamp + 7 days), "Test Fundraiser", "Test description", fundraiserGoal
         );
-        
+
         // Проверяем баланс и разрешение
         console.log("Balance before:", mockUSDC.balanceOf(address(this)));
         console.log("Allowance:", mockUSDC.allowance(address(this), address(fundraiserFactory)));
-        
+
         // Даем разрешение контракту на использование USDC
         vm.startPrank(address(this));
         mockUSDC.approve(address(fundraiserFactory), type(uint256).max);
         vm.stopPrank();
-        
+
         console.log("Allowance after approve:", mockUSDC.allowance(address(this), address(fundraiserFactory)));
-        
+
         // Make donation that reaches the goal
         fundraiserFactory.recordDonation(0, fundraiserGoal);
 
@@ -217,26 +185,26 @@ contract FundraiserFactoryTest is Test {
 contract MockUSDCWithTransfer {
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
-    
+
     constructor() {}
-    
+
     // Функция для установки баланса в тестах
     function setBalance(address account, uint256 amount) public {
         _balances[account] = amount;
     }
-    
+
     function transferFrom(address from, address to, uint256 amount) public returns (bool) {
         uint256 currentAllowance = _allowances[from][msg.sender];
         require(currentAllowance >= amount, "ERC20: insufficient allowance");
-        
+
         uint256 fromBalance = _balances[from];
         require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
-        
+
         _balances[from] = fromBalance - amount;
         _balances[to] += amount;
-        
+
         _allowances[from][msg.sender] = currentAllowance - amount;
-        
+
         return true;
     }
 
@@ -260,7 +228,7 @@ contract MockAavePool {
         // Просто возвращаем true, чтобы симулировать успешное выполнение
         return true;
     }
-    
+
     function withdraw(address asset, uint256 amount, address to) external returns (uint256) {
         // Возвращаем запрошенную сумму
         return amount;
@@ -270,22 +238,22 @@ contract MockAavePool {
 // Мок для aUSDC
 contract MockAUSDC {
     mapping(address => uint256) private _balances;
-    
+
     function setBalance(address account, uint256 amount) public {
         _balances[account] = amount;
     }
-    
+
     function balanceOf(address account) public view returns (uint256) {
         return _balances[account];
     }
-    
+
     function transfer(address to, uint256 amount) public returns (bool) {
         uint256 fromBalance = _balances[msg.sender];
         require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
-        
+
         _balances[msg.sender] = fromBalance - amount;
         _balances[to] += amount;
-        
+
         return true;
     }
 }

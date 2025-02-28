@@ -12,7 +12,7 @@ import {FundraiserStorage} from "./FundraiserStorage.sol";
  */
 library AdminFunctions {
     using SafeERC20 for IERC20;
-    
+
     /**
      * @notice Emergency function to withdraw all funds
      */
@@ -24,25 +24,21 @@ library AdminFunctions {
         address recipient
     ) external returns (uint256 balance) {
         if (recipient == address(0)) revert FundraiserStorage.InvalidAddress();
-        
+
         // First withdraw everything from Aave if enabled
         if (aaveEnabled && totalDeposited > 0) {
-            try IPool(aavePoolAddress).withdraw(
-                usdcAddress,
-                totalDeposited,
-                address(this)
-            ) {} catch {}
+            try IPool(aavePoolAddress).withdraw(usdcAddress, totalDeposited, address(this)) {} catch {}
         }
-        
+
         IERC20 usdc = IERC20(usdcAddress);
         balance = usdc.balanceOf(address(this));
         if (balance == 0) revert FundraiserStorage.InvalidInput(1);
-        
+
         usdc.safeTransfer(recipient, balance);
-        
+
         return balance;
     }
-    
+
     /**
      * @notice Emergency withdrawal from Aave
      */
@@ -53,23 +49,19 @@ library AdminFunctions {
         uint256 totalDeposited
     ) external returns (uint256 amountWithdrawn) {
         if (totalDeposited == 0) return 0;
-        
-        try IPool(aavePoolAddress).withdraw(
-            usdcAddress,
-            type(uint256).max,
-            address(this)
-        ) returns (uint256 withdrawnAmount) {
+
+        try IPool(aavePoolAddress).withdraw(usdcAddress, type(uint256).max, address(this)) returns (
+            uint256 withdrawnAmount
+        ) {
             amountWithdrawn = withdrawnAmount;
         } catch {
             // Even if withdrawal fails, try to get aUSDC balance
             try IERC20(aUsdcAddress).balanceOf(address(this)) returns (uint256 aTokenBalance) {
                 if (aTokenBalance > 0) {
                     // Try to withdraw all aTokens
-                    try IPool(aavePoolAddress).withdraw(
-                        usdcAddress,
-                        type(uint256).max,
-                        address(this)
-                    ) returns (uint256 redeemAmount) {
+                    try IPool(aavePoolAddress).withdraw(usdcAddress, type(uint256).max, address(this)) returns (
+                        uint256 redeemAmount
+                    ) {
                         amountWithdrawn = redeemAmount;
                     } catch {
                         amountWithdrawn = 0;
@@ -79,59 +71,50 @@ library AdminFunctions {
                 amountWithdrawn = 0;
             }
         }
-        
+
         return amountWithdrawn;
     }
-    
+
     /**
      * @notice Distributes yield generated from Aave deposits to a recipient
      */
-    function distributeYield(
-        address usdcAddress,
-        address aavePoolAddress,
-        address recipient,
-        uint256 availableYield
-    ) external returns (bool) {
+    function distributeYield(address usdcAddress, address aavePoolAddress, address recipient, uint256 availableYield)
+        external
+        returns (bool)
+    {
         if (availableYield == 0) return false;
-        
+
         uint256 contractBalanceBefore = IERC20(usdcAddress).balanceOf(address(this));
-        
+
         if (contractBalanceBefore < availableYield) {
             // Need to withdraw from Aave without reducing totalDeposited
             uint256 amountToWithdraw = availableYield - contractBalanceBefore;
-            try IPool(aavePoolAddress).withdraw(
-                usdcAddress, 
-                amountToWithdraw, 
-                address(this)
-            ) {} catch {
+            try IPool(aavePoolAddress).withdraw(usdcAddress, amountToWithdraw, address(this)) {}
+            catch {
                 return false;
             }
         }
-        
+
         // Transfer yield to the recipient
         IERC20(usdcAddress).safeTransfer(recipient, availableYield);
-        
+
         return true;
     }
-    
+
     /**
      * @notice Rescue accidentally sent ERC20 tokens
      */
-    function rescueERC20(
-        address tokenAddress,
-        address recipient,
-        uint256 amount
-    ) external returns (bool) {
+    function rescueERC20(address tokenAddress, address recipient, uint256 amount) external returns (bool) {
         IERC20(tokenAddress).safeTransfer(recipient, amount);
         return true;
     }
-    
+
     /**
      * @notice Withdraw accidentally sent ETH
      */
     function withdrawEth(address payable recipient) external returns (bool) {
         uint256 balance = address(this).balance;
-        (bool success, ) = recipient.call{value: balance}("");
+        (bool success,) = recipient.call{value: balance}("");
         return success;
     }
 
