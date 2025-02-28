@@ -12,6 +12,7 @@ import { CheckCircle } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
 import { useRouter } from 'next/router';
+import { useVerification } from '@/contexts/VerificationContext';
 
 // Add this at the top of the component to make external links more secure
 const externalLinkProps = {
@@ -19,16 +20,55 @@ const externalLinkProps = {
   rel: "noopener noreferrer"
 };
 
-const Home: NextPage = () => {
-  const router = useRouter();
+const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+
+const Verify: NextPage = () => {
+  const { setVerified } = useVerification();
+  const [apiResponse, setApiResponse] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [isVerified, setIsVerified] = useState(false);  
+  const router = useRouter();
+
+  const handleVerification = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(process.env.NEXT_PUBLIC_API_VERIFY_VC || '', {
+        method: 'POST',
+        headers: {
+          "X-API-Token": apiKey || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(vc),
+      });
+      const data = await response.json();
+      console.log('API Response:', data);
+      setApiResponse(data.message);
+      
+      if (data.isValid === true) {
+        // Short delay to show success message before redirecting
+        setTimeout(() => {
+          handleVerificationSuccess();
+        }, 1500);
+      }
+    } catch (error) {
+      setApiResponse('Error: Failed to verify credentials');
+      console.error('Verification failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerificationSuccess = () => {
+    setVerified(true);
+    router.push('/helpme');
+  };
 
   const handleLendAHand = () => {
     if (!isVerified) {
       router.push('/verify');
       return;
     }
-    router.push('/helprequest');
+    router.push('/helpme');
   };
 
   return (
@@ -48,20 +88,27 @@ const Home: NextPage = () => {
         {/* Enhanced Hero Section */}
         <div className="text-center mb-16 py-12 px-4">
           <h1 className="text-5xl font-extrabold tracking-tight lg:text-6xl mb-6 bg-gradient-to-r from-green-800 to-green-500 bg-clip-text text-transparent animate-fade-in">
-            Welcome to Helping Hand
+            Great! We can help you.
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Your fundraising platform on blockchain.
+            First, let's get you verified.
           </p>
         </div>
 
         <div className="text-center mb-16 py-12 px-4">
           <Button 
             variant="destructive" 
-            onClick={handleLendAHand}
+            onClick={handleVerification}
+            disabled={isLoading}
           >
-            Ask for Help
+            {isLoading ? 'Processing...' : 'Verify'}
           </Button>
+          
+          {apiResponse && (
+            <div className="mt-4 p-4 rounded-lg bg-secondary/30">
+              <p className="text-foreground">{apiResponse}</p>
+            </div>
+          )}
         </div>
 
       </main>
@@ -71,4 +118,4 @@ const Home: NextPage = () => {
   );
 };
 
-export default Home;
+export default Verify;
