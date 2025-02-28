@@ -1,0 +1,12 @@
+[33m95d1d57[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m HEAD@{0}: reset: moving to origin/main
+[33m48521c2[m HEAD@{1}: commit: Add tests
+[33m87bf2c4[m HEAD@{2}: pull: Fast-forward
+[33md9232c9[m HEAD@{3}: commit (merge): removed msg.sender in ownable from the constructor
+[33m35af4a6[m HEAD@{4}: checkout: moving from fundraiser-factory-aidan to main
+[33mb624962[m[33m ([m[1;32mfundraiser-factory-aidan[m[33m)[m HEAD@{5}: commit: Update FundraiserFactory constructor for OpenZeppelin v4.9.6
+[33mbc3ccb3[m HEAD@{6}: commit: forge install: openzeppelin-contracts
+[33m355efd3[m HEAD@{7}: commit: clean
+[33m6deab65[m[33m ([m[1;31morigin/fundraiser-factory-aidan[m[33m)[m HEAD@{8}: commit: Initial commit for fundraiser factory aidan implementation
+[33m35af4a6[m HEAD@{9}: checkout: moving from main to fundraiser-factory-aidan
+[33m35af4a6[m HEAD@{10}: commit: Dependency management
+[33m4f163f6[m HEAD@{11}: commit: forge install: openzeppelin-contracts
