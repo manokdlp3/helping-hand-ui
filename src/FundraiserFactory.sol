@@ -353,8 +353,8 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     function isFundraiserCompleted(uint256 _fundraiserId) public view returns (bool) {
         Fundraiser storage fundraiser = idToFundraiserEvent[_fundraiserId];
         
-        // A fundraiser is completed when all funds have been claimed
-        if (fundraiser.claimedAmount >= fundraiser.amountRaised) {
+        // A fundraiser is completed when all funds have been claimed AND there were funds raised
+        if (fundraiser.amountRaised > 0 && fundraiser.claimedAmount >= fundraiser.amountRaised) {
             return true;
         }
         
