@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.28;
 
 //Install openzeppelin v4.9.6
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -23,6 +23,11 @@ interface IAToken is IERC20 {
  * @title FundraiserFactory
  * @notice This contract allows creation and management of fundraisers with USDC as the contribution token.
  * @dev This is a thin proxy contract that delegates most functionality to library implementations.
+ *
+ * Sepolia Test Addresses:
+ * - USDC Address: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+ * - Aave Pool Address: 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
+ * - aUSDC Address: 0x16dA4541aD1807f4443d92D26044C1147406EB80
  */
 contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -53,6 +58,11 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
      * @param _usdcAddress Address of the USDC contract (6 decimals) on your target network (e.g., Sepolia).
      * @param _aavePoolAddress Address of the Aave Pool contract.
      * @param _aUsdcAddress Address of the aUSDC token contract.
+     *
+     * For Sepolia testing:
+     * _usdcAddress = 0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8
+     * _aavePoolAddress = 0x6Ae43d3271ff6888e7Fc43Fd7321a503ff738951
+     * _aUsdcAddress = 0x16dA4541aD1807f4443d92D26044C1147406EB22
      */
     constructor(
         address _usdcAddress, 

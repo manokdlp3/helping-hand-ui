@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.28;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -8,13 +8,13 @@ import {FundraiserStorage} from "./FundraiserStorage.sol";
 
 /**
  * @title AdminFunctions
- * @notice Библиотека административных функций для FundraiserFactory
+ * @notice Library of administrative functions for FundraiserFactory
  */
 library AdminFunctions {
     using SafeERC20 for IERC20;
     
     /**
-     * @notice Аварийная функция для вывода всех средств
+     * @notice Emergency function to withdraw all funds
      */
     function emergencyWithdraw(
         address usdcAddress,
@@ -25,7 +25,7 @@ library AdminFunctions {
     ) external returns (uint256 balance) {
         if (recipient == address(0)) revert FundraiserStorage.InvalidAddress();
         
-        // Сначала выводим всё из Aave, если включено
+        // First withdraw everything from Aave if enabled
         if (aaveEnabled && totalDeposited > 0) {
             try IPool(aavePoolAddress).withdraw(
                 usdcAddress,
@@ -44,7 +44,7 @@ library AdminFunctions {
     }
     
     /**
-     * @notice Аварийное снятие средств из Aave
+     * @notice Emergency withdrawal from Aave
      */
     function emergencyWithdrawFromAave(
         address usdcAddress,
@@ -61,10 +61,10 @@ library AdminFunctions {
         ) returns (uint256 withdrawnAmount) {
             amountWithdrawn = withdrawnAmount;
         } catch {
-            // Даже если вывод не удался, пробуем получить баланс aUSDC
+            // Even if withdrawal fails, try to get aUSDC balance
             try IERC20(aUsdcAddress).balanceOf(address(this)) returns (uint256 aTokenBalance) {
                 if (aTokenBalance > 0) {
-                    // Пробуем вывести все aTokens
+                    // Try to withdraw all aTokens
                     try IPool(aavePoolAddress).withdraw(
                         usdcAddress,
                         type(uint256).max,
@@ -84,7 +84,7 @@ library AdminFunctions {
     }
     
     /**
-     * @notice Распределяет доход, полученный от депозитов Aave, получателю
+     * @notice Distributes yield generated from Aave deposits to a recipient
      */
     function distributeYield(
         address usdcAddress,
@@ -97,7 +97,7 @@ library AdminFunctions {
         uint256 contractBalanceBefore = IERC20(usdcAddress).balanceOf(address(this));
         
         if (contractBalanceBefore < availableYield) {
-            // Необходимо вывести из Aave без уменьшения totalDeposited
+            // Need to withdraw from Aave without reducing totalDeposited
             uint256 amountToWithdraw = availableYield - contractBalanceBefore;
             try IPool(aavePoolAddress).withdraw(
                 usdcAddress, 
@@ -108,14 +108,14 @@ library AdminFunctions {
             }
         }
         
-        // Переводим доход получателю
+        // Transfer yield to the recipient
         IERC20(usdcAddress).safeTransfer(recipient, availableYield);
         
         return true;
     }
     
     /**
-     * @notice Спасение случайно отправленных токенов ERC20
+     * @notice Rescue accidentally sent ERC20 tokens
      */
     function rescueERC20(
         address tokenAddress,
@@ -127,7 +127,7 @@ library AdminFunctions {
     }
     
     /**
-     * @notice Вывод случайно отправленного ETH
+     * @notice Withdraw accidentally sent ETH
      */
     function withdrawEth(address payable recipient) external returns (bool) {
         uint256 balance = address(this).balance;
@@ -145,9 +145,9 @@ library AdminFunctions {
     }
 
     /**
-     * @notice Устанавливает флаг разрешения экстренных выводов пользователями даже во время паузы
-     * @param state Указатель на хранилище состояния
-     * @param _enabled Флаг разрешения экстренных выводов
+     * @notice Sets the flag allowing emergency withdrawals by users even during pause
+     * @param state Pointer to the state storage
+     * @param _enabled Emergency withdrawals enabled flag
      */
     function setEmergencyWithdrawalsEnabled(FundraiserStorage.State storage state, bool _enabled) internal {
         state.emergencyWithdrawalsEnabled = _enabled;

@@ -18,11 +18,18 @@ library FundraiserLogic {
      * @return True if the fundraiser is completed
      */
     function isFundraiserCompleted(FundraiserStorage.Fundraiser storage fundraiser) internal view returns (bool) {
-        // Check the cheapest conditions first to save gas
+        // Check if there are any funds raised first
+        if (fundraiser.amountRaised == 0) {
+            // No funds raised yet, so not completed
+            return false;
+        }
+        
+        // Check if all funds have been claimed
         if (fundraiser.claimedAmount >= fundraiser.amountRaised) {
             return true;
         }
         
+        // Check if failed (ended without reaching goal)
         return (block.timestamp > fundraiser.endDate && 
                 fundraiser.amountRaised < fundraiser.fundraiserGoal);
     }
@@ -70,7 +77,7 @@ library FundraiserLogic {
     }
 
     /**
-     * @notice Определяет, может ли пользователь произвести чрезвычайное снятие средств
+     * @notice Determines if a user can perform an emergency withdrawal
      */
     function canPerformEmergencyWithdrawal(
         FundraiserStorage.Fundraiser storage theFundraiser,
@@ -82,10 +89,10 @@ library FundraiserLogic {
         
         if (userContribution == 0) return (false, 0);
         
-        // Проверяем, завершен ли сбор средств или все средства выведены
+        // Check if the fundraiser is completed or all funds withdrawn
         if (theFundraiser.claimedAmount >= theFundraiser.amountRaised) return (false, 0);
         
-        // Вычисляем максимально допустимую сумму вывода
+        // Calculate the maximum allowed withdrawal amount
         uint256 availableFunds = theFundraiser.amountRaised - theFundraiser.claimedAmount;
         uint256 withdrawAmount = userContribution <= availableFunds ? userContribution : availableFunds;
         
@@ -93,7 +100,7 @@ library FundraiserLogic {
     }
 
     /**
-     * @notice Обрабатывает чрезвычайный вывод средств пользователем
+     * @notice Processes emergency withdrawal by a user
      */
     function processEmergencyUserWithdraw(
         FundraiserStorage.Fundraiser storage theFundraiser,
@@ -103,11 +110,11 @@ library FundraiserLogic {
     ) external returns (uint256 withdrawAmount) {
         uint256 userContribution = state.userContributions[user][fundraiserId];
         
-        // Вычисляем максимально допустимую сумму вывода
+        // Calculate the maximum allowed withdrawal amount
         uint256 availableFunds = theFundraiser.amountRaised - theFundraiser.claimedAmount;
         withdrawAmount = userContribution <= availableFunds ? userContribution : availableFunds;
         
-        // Обновляем состояние
+        // Update state
         state.userContributions[user][fundraiserId] -= withdrawAmount;
         theFundraiser.amountRaised = uint128(uint256(theFundraiser.amountRaised) - withdrawAmount);
         
