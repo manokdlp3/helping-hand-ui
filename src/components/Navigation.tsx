@@ -20,9 +20,6 @@ export const Navigation = ({ isVerified, onAskForHelp }: NavigationProps) => {
           </Link>
         </div>
         <div className="hidden md:flex items-center space-x-6">
-          <Button variant="ghost" asChild>
-            <Link href="/">Lend a Hand</Link>
-          </Button>
           <Button 
             variant="ghost" 
             onClick={onAskForHelp}
@@ -30,10 +27,7 @@ export const Navigation = ({ isVerified, onAskForHelp }: NavigationProps) => {
             Ask for Help
           </Button>
           <Button variant="ghost" asChild>
-            <Link href="/helprequest">View Request</Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/contract">Test Contract</Link>
+            <Link href="/lendahand">Lend a Hand</Link>
           </Button>
         </div>
         <CheckCircle 

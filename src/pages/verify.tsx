@@ -12,6 +12,7 @@ import { CheckCircle } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
 import { useRouter } from 'next/router';
+import { useVerification } from '@/contexts/VerificationContext';
 
 // Add this at the top of the component to make external links more secure
 const externalLinkProps = {
@@ -22,6 +23,7 @@ const externalLinkProps = {
 const apiKey = process.env.NEXT_PUBLIC_API_KEY;
 
 const Verify: NextPage = () => {
+  const { setVerified } = useVerification();
   const [apiResponse, setApiResponse] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isVerified, setIsVerified] = useState(false);  
@@ -45,7 +47,7 @@ const Verify: NextPage = () => {
       if (data.isValid === true) {
         // Short delay to show success message before redirecting
         setTimeout(() => {
-          router.push('/helpme');
+          handleVerificationSuccess();
         }, 1500);
       }
     } catch (error) {
@@ -56,12 +58,17 @@ const Verify: NextPage = () => {
     }
   };
 
+  const handleVerificationSuccess = () => {
+    setVerified(true);
+    router.push('/helpme');
+  };
+
   const handleLendAHand = () => {
     if (!isVerified) {
       router.push('/verify');
       return;
     }
-    router.push('/helprequest');
+    router.push('/helpme');
   };
 
   return (
