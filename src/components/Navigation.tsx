@@ -23,7 +23,10 @@ export const Navigation = ({ isVerified = false }: NavigationProps) => {
             <Link href="/">Lend a Hand</Link>
           </Button>
           <Button variant="ghost" asChild>
-            <Link href="/">Fundraise</Link>
+            <Link href="/helpme">Ask for Help</Link>
+          </Button>
+          <Button variant="ghost" asChild>
+            <Link href="/helprequest">View Request</Link>
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/contract">Test Contract</Link>
