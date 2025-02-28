@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+//Install openzeppelin v4.9.6
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -57,7 +58,7 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
         address _usdcAddress, 
         address _aavePoolAddress, 
         address _aUsdcAddress
-    ) Ownable(msg.sender) {
+    ) Ownable(msg.sender) { 
         if (_usdcAddress == address(0)) revert InvalidAddress();
         if (_aavePoolAddress == address(0)) revert InvalidAddress();
         if (_aUsdcAddress == address(0)) revert InvalidAddress();
@@ -69,6 +70,8 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
         state.USDC_DECIMAL_FACTOR = USDC_DECIMAL_FACTOR;
         AaveFunctions.setEmergencyReservePercentage(state, 20);
         AaveFunctions.setAaveEnabled(state, true);
+        require(_usdcAddress != address(0), "Invalid USDC address");
+        usdcAddress = _usdcAddress;
     }
 
     // -----------------------------
@@ -558,6 +561,8 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
         state.contentRegistry[_hash] = _content;
         emit ContentAdded(_hash, _content);
     }
+
+
 
     /**
      * @notice Set whether emergency user withdrawals are enabled even during pause

@@ -1,0 +1,8 @@
+{
+    "claims": {
+      "kyc": "passed",
+      "age": 22,
+      "custom_claim": "value"
+    },
+    "subject_address": "0x0fa4adf7830a048c285e981ba5d57c51604c917f"
+  }
