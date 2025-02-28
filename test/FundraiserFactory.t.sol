@@ -50,6 +50,21 @@ contract FundraiserFactoryTest is Test {
         assertEq(goalReached, false);
     }
 
+    function testAddFundraiserWithInvalidEndDate() public {
+        // Test with end date in the past
+        // Use a safe way to get past timestamp to avoid underflow
+        vm.warp(1000000); // Start at a known timestamp
+        uint64 pastEndDate = uint64(block.timestamp - 1 days);
+        
+        vm.expectRevert("End date must be in the future");
+        fundraiserFactory.addFundraiser(
+            pastEndDate,
+            "Test Fundraiser",
+            "Test description",
+            1000 * 10**USDC_DECIMALS
+        );
+    }
+
     function testRecordDonation() public {
         // Start at a known timestamp
         vm.warp(1000000);
@@ -96,6 +111,65 @@ contract FundraiserFactoryTest is Test {
 
         // Check the donation was recorded
         assertEq(fundraiserFactory.getUserContribution(address(this), 0), donationAmount);
+    }
+
+    function testRecordDonationWithInvalidAmount() public {
+        uint64 endDate = uint64(block.timestamp + 7 days);
+        fundraiserFactory.addFundraiser(
+            endDate,
+            "Test Fundraiser",
+            "Test description",
+            1000 * 10**USDC_DECIMALS
+        );
+
+        // Update to match contract's error message
+        vm.expectRevert("Amount must be greater than 0");
+        fundraiserFactory.recordDonation(0, 0);
+    }
+
+    function testRecordDonationAfterEndDate() public {
+        // Create fundraiser
+        uint64 endDate = uint64(block.timestamp + 7 days);
+        fundraiserFactory.addFundraiser(
+            endDate,
+            "Test Fundraiser",
+            "Test description",
+            1000 * 10**USDC_DECIMALS
+        );
+
+        // Warp time to after end date
+        vm.warp(endDate + 1);
+
+        // Update to match contract's error message
+        vm.expectRevert("Funding period has ended");
+        fundraiserFactory.recordDonation(0, 100 * 10**USDC_DECIMALS);
+    }
+
+    function testGoalReachedStatus() public {
+        uint256 fundraiserGoal = 1000 * 10**USDC_DECIMALS;
+        
+        // Start at a known timestamp
+        vm.warp(1000000);
+        
+        fundraiserFactory.addFundraiser(
+            uint64(block.timestamp + 7 days),
+            "Test Fundraiser",
+            "Test description",
+            fundraiserGoal
+        );
+
+        // Setup mock USDC
+        MockUSDC mockUSDC = new MockUSDC();
+        vm.etch(USDC_ADDRESS, address(mockUSDC).code);
+        
+        // Make donation that reaches the goal
+        fundraiserFactory.recordDonation(0, fundraiserGoal);
+
+        // Verify goal reached status
+        (,,,,,,, bool isCompleted, bool goalReached) = fundraiserFactory.getFundraiser(0);
+        assertEq(goalReached, true, "Goal should be marked as reached");
+        // Remove this assertion since completion is based on claimed amounts
+        // assertEq(isCompleted, true, "Fundraiser should be marked as completed");
     }
 }
 
