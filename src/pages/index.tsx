@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useState } from 'react';
+import vc from './vc.json';
+import id from './id.json';
+import { CheckCircle } from 'lucide-react';
 
 // Add this at the top of the component to make external links more secure
 const externalLinkProps = {
@@ -12,7 +16,38 @@ const externalLinkProps = {
   rel: "noopener noreferrer"
 };
 
+const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+
 const Home: NextPage = () => {
+  const [apiResponse, setApiResponse] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);  
+
+  const handleLendAHand = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(process.env.NEXT_PUBLIC_API_VERIFY_VC || '', {
+        method: 'POST',
+        headers: {
+            "X-API-Token": apiKey || '',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(vc), 
+      }
+
+      ); // Replace with your actual API endpoint
+      const data = await response.json();
+      console.log('API Response:', data);
+      setApiResponse(data.message);
+      setIsVerified(data.isValid === true);
+    } catch (error) {
+      setApiResponse('Error: Failed to fetch data');
+      console.error('API call failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
       <Head>
@@ -42,6 +77,11 @@ const Home: NextPage = () => {
               <Link href="/examples/erc20">Fundraise</Link>
             </Button>
           </div>
+          <div className="flex items-center gap-4">
+            <CheckCircle 
+              className={`w-6 h-6 ${isVerified ? 'text-green-500' : 'text-gray-300'}`} 
+            />
+          </div>
           <ConnectButton />
         </div>
       </nav>
@@ -58,9 +98,19 @@ const Home: NextPage = () => {
         </div>
 
         <div className="text-center mb-16 py-12 px-4">
-          <Button variant="destructive">
-            <Link href="/examples/simple-storage">Lend a Hand</Link>
+          <Button 
+            variant="destructive" 
+            onClick={handleLendAHand}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processing...' : 'Lend a Hand'}
           </Button>
+          
+          {apiResponse && (
+            <div className="mt-4 p-4 rounded-lg bg-secondary/30">
+              <p className="text-foreground">{apiResponse}</p>
+            </div>
+          )}
         </div>
 
       </main>

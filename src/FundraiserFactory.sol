@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
+//Install openzeppelin v4.9.6
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -25,13 +26,14 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     // Represents a fundraiser proposal
     struct Fundraiser {
         address owner;           
-        uint256 startDate;       
-        uint256 endDate;         
+        uint64 startDate;       // Using uint64 for timestamp to save gas
+        uint64 endDate;         // Using uint64 for timestamp to save gas 
         string subject;          
         string additionalDetails;
         uint256 fundraiserGoal; // stored in base USDC units (6 decimals)
-        uint256 amountRaised;    // stored in base USDC units (6 decimals)
-        bool goalReached;        // flag to track if goal has been reached
+        uint256 amountRaised;   // stored in base USDC units (6 decimals)
+        // isCompleted no longer stored - now derived from state
+        uint256 claimedAmount;  // track how much was withdrawn
     }
 
     // ID counter for newly created fundraisers
@@ -41,14 +43,14 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     address public immutable usdcAddress;
     
     // USDC decimal handling
-    uint256 private constant USDC_DECIMALS = 6;
+    uint8 private constant USDC_DECIMALS = 6;
     uint256 private constant USDC_DECIMAL_FACTOR = 10**USDC_DECIMALS;
 
     // Events
     event FundraiserCreated(
         uint256 indexed fundraiserId,
         address indexed owner,
-        uint256 endDate,
+        uint64 endDate,
         uint256 fundraiserGoal
     );
     event Deposit(address indexed user, uint256 indexed fundraiserId, uint256 amount);
@@ -62,7 +64,7 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     /**
      * @param _usdcAddress Address of the USDC contract (6 decimals) on your target network (e.g., Sepolia).
      */
-    constructor(address _usdcAddress) Ownable(msg.sender) {
+    constructor(address _usdcAddress) Ownable() {
         require(_usdcAddress != address(0), "Invalid USDC address");
         usdcAddress = _usdcAddress;
     }
@@ -104,9 +106,9 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     //  CREATE A FUNDRAISER
     // -----------------------------
     function addFundraiser(
-        uint256 _endDate, 
-        string memory _subject, 
-        string memory _additionalDetails, 
+        uint64 _endDate, 
+        string calldata _subject, 
+        string calldata _additionalDetails, 
         uint256 _initialAmountNeeded // in normal USDC units (e.g., 10 means 10 USDC)
     ) external whenNotPaused {
         require(_endDate > block.timestamp, "End date must be in the future");
@@ -115,20 +117,18 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         // Convert to base units with overflow protection (Solidity 0.8.x has built-in checks)
         uint256 baseUnitsNeeded = _initialAmountNeeded * USDC_DECIMAL_FACTOR;
         
-        Fundraiser memory newFundraiser = Fundraiser({
+        uint256 fundraiserId = fundraiserEventCounter++;
+        
+        idToFundraiserEvent[fundraiserId] = Fundraiser({
             owner: msg.sender,
-            startDate: block.timestamp,
+            startDate: uint64(block.timestamp),
             endDate: _endDate,
             subject: _subject,
             additionalDetails: _additionalDetails,
             fundraiserGoal: baseUnitsNeeded,
             amountRaised: 0,
-            goalReached: false
+            claimedAmount: 0
         });
-
-        uint256 fundraiserId = fundraiserEventCounter;
-        idToFundraiserEvent[fundraiserId] = newFundraiser;
-        fundraiserEventCounter++;
 
         emit FundraiserCreated(fundraiserId, msg.sender, _endDate, baseUnitsNeeded);
     }
@@ -147,9 +147,11 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
         require(_amount > 0, "Amount must be greater than 0");
         
-        // Ensure the funding window is still open
         Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
+        
+        // Ensure the funding window is still open and fundraiser is not completed
         require(block.timestamp <= theFundraiser.endDate, "Funding period has ended");
+        require(!isFundraiserCompleted(_fundraiserId), "Fundraiser is completed");
 
         // Convert deposit to base units
         uint256 depositInBaseUnits = _amount * USDC_DECIMAL_FACTOR;
@@ -158,14 +160,8 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         userContributions[msg.sender][_fundraiserId] += depositInBaseUnits;
         theFundraiser.amountRaised += depositInBaseUnits;
         
-        // Check if goal has been reached
-        if (!theFundraiser.goalReached && theFundraiser.amountRaised >= theFundraiser.fundraiserGoal) {
-            theFundraiser.goalReached = true;
-        }
-        
         // Transfer USDC from the user to this contract (Interactions pattern)
-        IERC20 usdc = IERC20(usdcAddress);
-        usdc.safeTransferFrom(msg.sender, address(this), depositInBaseUnits);
+        IERC20(usdcAddress).safeTransferFrom(msg.sender, address(this), depositInBaseUnits);
         
         emit Deposit(msg.sender, _fundraiserId, depositInBaseUnits);
     }
@@ -187,23 +183,27 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
         require(theFundraiser.owner == msg.sender, "Only owner can withdraw");
         
+        // Calculate if goal reached
+        bool goalReached = theFundraiser.amountRaised >= theFundraiser.fundraiserGoal;
+        
         // Owner can withdraw only if goal reached OR funding period ended
         require(
-            theFundraiser.goalReached || block.timestamp > theFundraiser.endDate,
-            "Cannot withdraw: goal not reached and funding period not ended"
+            goalReached || block.timestamp > theFundraiser.endDate,
+            "Cannot withdraw: goal not reached or still active"
         );
-
-        uint256 withdrawInBaseUnits = _amount * USDC_DECIMAL_FACTOR;
-        require(theFundraiser.amountRaised >= withdrawInBaseUnits, "Not enough in fundraiser balance");
         
+        // Check if there's enough unclaimed balance
+        uint256 withdrawAmount = _amount * USDC_DECIMAL_FACTOR;
+        uint256 availableToWithdraw = theFundraiser.amountRaised - theFundraiser.claimedAmount;
+        require(availableToWithdraw >= withdrawAmount, "Not enough in fundraiser balance");
+
         // Update state before external calls (Checks-Effects pattern)
-        theFundraiser.amountRaised -= withdrawInBaseUnits;
+        theFundraiser.claimedAmount += withdrawAmount;
 
         // Transfer from this contract's USDC balance to the owner (Interactions pattern)
-        IERC20 usdc = IERC20(usdcAddress);
-        usdc.safeTransfer(msg.sender, withdrawInBaseUnits);
+        IERC20(usdcAddress).safeTransfer(msg.sender, withdrawAmount);
 
-        emit Withdrawal(msg.sender, _fundraiserId, withdrawInBaseUnits);
+        emit Withdrawal(msg.sender, _fundraiserId, withdrawAmount);
     }
 
     // -----------------------------
@@ -245,10 +245,13 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         string memory additionalDetails,
         uint256 fundraiserGoal,
         uint256 amountRaised,
+        bool isCompleted,
         bool goalReached
     ) {
         require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
         Fundraiser storage fundraiser = idToFundraiserEvent[_fundraiserId];
+        
+        bool hasReachedGoal = fundraiser.amountRaised >= fundraiser.fundraiserGoal;
         
         return (
             fundraiser.owner,
@@ -258,7 +261,8 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
             fundraiser.additionalDetails,
             fundraiser.fundraiserGoal / USDC_DECIMAL_FACTOR,
             fundraiser.amountRaised / USDC_DECIMAL_FACTOR,
-            fundraiser.goalReached
+            isFundraiserCompleted(_fundraiserId),
+            hasReachedGoal
         );
     }
     
@@ -337,5 +341,57 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
         }
         
         return string(str);
+    }
+
+
+
+    /**
+     * @notice Determines if a fundraiser is completed based on claimed amounts and end date
+     * @param _fundraiserId The ID of the fundraiser to check
+     * @return True if the fundraiser is completed
+     */
+    function isFundraiserCompleted(uint256 _fundraiserId) public view returns (bool) {
+        Fundraiser storage fundraiser = idToFundraiserEvent[_fundraiserId];
+        
+        // A fundraiser is completed when all funds have been claimed
+        if (fundraiser.claimedAmount >= fundraiser.amountRaised) {
+            return true;
+        }
+        
+        // Or if the fundraiser end date has passed and the goal wasn't reached
+        if (block.timestamp > fundraiser.endDate && 
+            fundraiser.amountRaised < fundraiser.fundraiserGoal) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * @notice Manually mark a fundraiser as completed by withdrawing remaining funds
+     * @param _fundraiserId The ID of the fundraiser to complete
+     */
+    function completeFundraiser(uint256 _fundraiserId) external nonReentrant whenNotPaused {
+        require(_fundraiserId < fundraiserEventCounter, "Fundraiser does not exist");
+        
+        Fundraiser storage theFundraiser = idToFundraiserEvent[_fundraiserId];
+        require(theFundraiser.owner == msg.sender, "Only owner can complete fundraiser");
+        require(!isFundraiserCompleted(_fundraiserId), "Fundraiser already completed");
+        
+        // Calculate remaining funds to withdraw
+        uint256 remainingFunds = theFundraiser.amountRaised - theFundraiser.claimedAmount;
+        
+        // If there are remaining funds, withdraw them
+        if (remainingFunds > 0) {
+            // Update state before transfer
+            theFundraiser.claimedAmount = theFundraiser.amountRaised;
+            
+            // Transfer remaining funds
+            IERC20(usdcAddress).safeTransfer(msg.sender, remainingFunds);
+            emit Withdrawal(msg.sender, _fundraiserId, remainingFunds);
+        } else {
+            // Just mark as completed by setting claimed amount equal to raised
+            theFundraiser.claimedAmount = theFundraiser.amountRaised;
+        }
     }
 }
