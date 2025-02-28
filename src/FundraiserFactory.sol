@@ -37,7 +37,7 @@ contract FundraiserFactory is Ownable, ReentrancyGuard, Pausable {
     }
 
     // ID counter for newly created fundraisers
-    uint256 private fundraiserEventCounter;
+    uint256 public fundraiserEventCounter;
 
     // Address of the USDC token contract
     address public immutable usdcAddress;
