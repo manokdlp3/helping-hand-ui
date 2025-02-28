@@ -6,6 +6,7 @@ import Head from 'next/head';
 import { Button } from "@/components/ui/button";
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
+import { useRouter } from 'next/navigation';
 
 declare global {
   interface Window {
@@ -24,6 +25,8 @@ const ContractPage = () => {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string>('');
   const [isVerified, setIsVerified] = useState(false);
+
+  const router = useRouter();
 
   // Initialize contract instance
   useEffect(() => {
@@ -77,6 +80,14 @@ const ContractPage = () => {
     setter(e.target.value);
   };
 
+  const handleLendAHand = () => {
+    if (!isVerified) {
+      router.push('/verify');
+      return;
+    }
+    router.push('/helprequest');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
       <Head>
@@ -88,7 +99,7 @@ const ContractPage = () => {
         <link href="/favicon.ico" rel="icon" />
       </Head>
 
-      <Navigation isVerified={isVerified} />
+      <Navigation isVerified={isVerified} onAskForHelp={handleLendAHand} />
 
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Typography variant="h4" gutterBottom>

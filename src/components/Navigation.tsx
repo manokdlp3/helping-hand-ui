@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle } from 'lucide-react';
 
 interface NavigationProps {
-  isVerified?: boolean;
+  isVerified: boolean;
+  onAskForHelp: () => void;
 }
 
-export const Navigation = ({ isVerified = false }: NavigationProps) => {
+export const Navigation = ({ isVerified, onAskForHelp }: NavigationProps) => {
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
@@ -22,8 +23,11 @@ export const Navigation = ({ isVerified = false }: NavigationProps) => {
           <Button variant="ghost" asChild>
             <Link href="/">Lend a Hand</Link>
           </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/helpme">Ask for Help</Link>
+          <Button 
+            variant="ghost" 
+            onClick={onAskForHelp}
+          >
+            Ask for Help
           </Button>
           <Button variant="ghost" asChild>
             <Link href="/helprequest">View Request</Link>
