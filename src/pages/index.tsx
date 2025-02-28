@@ -9,6 +9,8 @@ import { useState } from 'react';
 import vc from './vc.json';
 import id from './id.json';
 import { CheckCircle } from 'lucide-react';
+import { Navigation } from '@/components/Navigation';
+import { Footer } from '@/components/Footer';
 
 // Add this at the top of the component to make external links more secure
 const externalLinkProps = {
@@ -59,32 +61,7 @@ const Home: NextPage = () => {
         <link href="/favicon.ico" rel="icon" />
       </Head>
 
-      {/* Enhanced Navigation Bar */}
-      <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center space-x-2">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-green-800 to-green-500 bg-clip-text text-transparent">
-                Helping Hand
-              </h1>
-            </Link>
-          </div>
-          <div className="hidden md:flex items-center space-x-6">
-            <Button variant="ghost" asChild>
-              <Link href="/examples/simple-storage">Lend a Hand</Link>
-            </Button>
-            <Button variant="ghost" asChild>
-              <Link href="/examples/erc20">Fundraise</Link>
-            </Button>
-          </div>
-          <div className="flex items-center gap-4">
-            <CheckCircle 
-              className={`w-6 h-6 ${isVerified ? 'text-green-500' : 'text-gray-300'}`} 
-            />
-          </div>
-          <ConnectButton />
-        </div>
-      </nav>
+      <Navigation isVerified={isVerified} />
 
       <main className="container mx-auto p-8 max-w-4xl">
         {/* Enhanced Hero Section */}
@@ -115,26 +92,7 @@ const Home: NextPage = () => {
 
       </main>
 
-      {/* Enhanced Footer */}
-      <footer className="border-t mt-24 bg-background/50 backdrop-blur-sm">
-        <div className="container flex flex-col items-center justify-between gap-4 py-10 md:h-24 md:flex-row md:py-0">
-          <p className="text-center text-sm leading-loose text-muted-foreground md:text-left">
-            Built with ❤️ for Web3 Development Learning
-          </p>
-          <div className="flex items-center space-x-6">
-            <Link href="/docs" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-              Documentation
-            </Link>
-            <Link
-              href="https://github.com"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              {...externalLinkProps}
-            >
-              GitHub
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };
