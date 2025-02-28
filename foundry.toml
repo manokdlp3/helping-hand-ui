@@ -1,12 +1,9 @@
 [profile.default]
-src = "src"
-out = "out"
-libs = ["lib"]
-"openzeppelin-contracts" = "github:OpenZeppelin/openzeppelin-contracts"
+src = 'src'
+out = 'out'
+libs = ['lib']
 
-
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-
+# Remappings should be outside any section, or use remappings array:
 remappings = [
-    "@openzeppelin/=lib/openzeppelin-contracts/"
+  '@openzeppelin/=lib/openzeppelin-contracts/'
 ]
