@@ -20,12 +20,14 @@ const ContractPage = () => {
   const [contract, setContract] = useState<Contract | null>(null);
   
   // Form states
+  const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [subject, setSubject] = useState('');
   const [additionalDetails, setAdditionalDetails] = useState('');
   const [initialAmount, setInitialAmount] = useState('');
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState('');
+  const [fundraiserId, setFundraiserId] = useState<string>('0');
   
   // Result states
   const [result, setResult] = useState<any>(null);
@@ -96,6 +98,49 @@ const ContractPage = () => {
       setResult(ethers.formatEther(result));
     } catch (err: any) {
       setError(err.message);
+    }
+  };
+
+  const handleGetFundraiser = async () => {
+    try {
+      if (!contract) throw new Error('Contract not initialized');
+      if (!fundraiserId.trim()) throw new Error('Please enter a fundraiser ID');
+      
+      const parsedId = parseInt(fundraiserId);
+      if (isNaN(parsedId)) {
+        throw new Error('Please enter a valid number');
+      }
+
+      const fundraiser = await contract.getFundraiser(parsedId);
+      console.log('Raw fundraiser data:', fundraiser); // Log the raw response
+
+      // Check if fundraiser is an array (some contracts return arrays for struct types)
+      const fundraiserData = Array.isArray(fundraiser) ? {
+        owner: fundraiser[0],
+        startDate: fundraiser[1],
+        endDate: fundraiser[2],
+        subject: fundraiser[3],
+        additionalDetails: fundraiser[4],
+        amountNeeded: fundraiser[5],
+        amountCollected: fundraiser[6],
+        isGoalReached: fundraiser[7]
+      } : fundraiser;
+
+      console.log('Processed fundraiser data:', fundraiserData); // Log the processed data
+
+      setResult({
+        owner: fundraiserData.owner,
+        startDate: new Date(Number(fundraiserData.startDate) * 1000).toLocaleString(),
+        endDate: new Date(Number(fundraiserData.endDate) * 1000).toLocaleString(),
+        subject: fundraiserData.subject,
+        additionalDetails: fundraiserData.additionalDetails,
+        amountNeeded: ethers.formatEther(fundraiserData.amountNeeded),
+        amountCollected: ethers.formatEther(fundraiserData.amountCollected),
+        isGoalReached: fundraiserData.isGoalReached
+      });
+    } catch (err: any) {
+      console.error('Error details:', err);
+      setError(err.message || 'Failed to get fundraiser details');
     }
   };
 
@@ -224,13 +269,48 @@ const ContractPage = () => {
             </Paper>
           </Grid>
 
+          <Grid item xs={12} md={6}>
+            <Paper sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>Get Fundraiser</Typography>
+              <TextField
+                fullWidth
+                label="Fundraiser ID"
+                type="number"
+                value={fundraiserId}
+                onChange={handleInputChange(setFundraiserId)}
+                inputProps={{ min: "0", step: "1" }}
+                sx={{ mb: 2 }}
+              />
+              <MuiButton
+                variant="contained"
+                onClick={handleGetFundraiser}
+                fullWidth
+              >
+                Get Fundraiser Details
+              </MuiButton>
+            </Paper>
+          </Grid>
+
           {result && (
             <Grid item xs={12}>
               <Paper sx={{ p: 2 }}>
                 <Typography variant="h6" gutterBottom>Result</Typography>
-                <pre style={{ overflow: 'auto', maxHeight: '200px' }}>
-                  {JSON.stringify(result, null, 2)}
-                </pre>
+                {typeof result === 'object' && 'owner' in result ? (
+                  <div>
+                    <Typography><strong>Owner:</strong> {result.owner}</Typography>
+                    <Typography><strong>Start Date:</strong> {result.startDate}</Typography>
+                    <Typography><strong>End Date:</strong> {result.endDate}</Typography>
+                    <Typography><strong>Subject:</strong> {result.subject}</Typography>
+                    <Typography><strong>Details:</strong> {result.additionalDetails}</Typography>
+                    <Typography><strong>Amount Needed:</strong> {result.amountNeeded} ETH</Typography>
+                    <Typography><strong>Amount Collected:</strong> {result.amountCollected} ETH</Typography>
+                    <Typography><strong>Goal Reached:</strong> {result.isGoalReached ? 'Yes' : 'No'}</Typography>
+                  </div>
+                ) : (
+                  <pre style={{ overflow: 'auto', maxHeight: '200px' }}>
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                )}
               </Paper>
             </Grid>
           )}
