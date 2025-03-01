@@ -51,7 +51,7 @@ const TempPage = () => {
       router.push('/verify');
       return;
     }
-    router.push('/helprequest');
+    router.push('/helpme');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

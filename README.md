@@ -23,8 +23,9 @@ $ git clone https://github.com/manokdlp3/helping-hand-ui.git
 ```shell
 $ npm install
 ```
-#### Provide API Key
-Enter your Humanity API Key in the env file.
+#### Update `.env.local`
+`NEXT_PUBLIC_API_KEY=` Enter your Humanity API Key in the env file.
+`NEXT_PUBLIC_CONTRACT_ADDRESS="0xb7336CD501e0FB525917f38599aA58107DB14663"` // Use this latest contract address
 
 #### Run
 ```shell
