@@ -83,21 +83,21 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
     // -----------------------------
     //  ADMIN FUNCTIONS
     // -----------------------------
-
+    
     /**
      * @notice Pauses the contract, preventing donations and withdrawals
      */
     function pause() external onlyOwner {
         _pause();
     }
-
+    
     /**
      * @notice Unpauses the contract, allowing donations and withdrawals
      */
     function unpause() external onlyOwner {
         _unpause();
     }
-
+    
     /**
      * @notice Emergency function to withdraw all funds in case of critical issues
      * @param _recipient Address to receive the funds
@@ -113,7 +113,7 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
         IERC20 usdc = IERC20(state.usdcAddress);
         uint256 balance = usdc.balanceOf(address(this));
         if (balance == 0) revert InvalidInput(1);
-
+        
         usdc.safeTransfer(_recipient, balance);
         emit EmergencyWithdrawal(_recipient, balance);
     }
@@ -131,9 +131,9 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
      * @param _initialAmountNeeded Target goal in normal USDC units (e.g., 1000 = 1000 USDC)
      */
     function addFundraiser(
-        uint64 _endDate,
-        string calldata _subject,
-        string calldata _additionalDetails,
+        uint64 _endDate, 
+        string calldata _subject, 
+        string calldata _additionalDetails, 
         uint256 _initialAmountNeeded
     ) external whenNotPaused {
         if (_endDate <= block.timestamp) revert FundingPeriodEnded();
@@ -179,27 +179,27 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
      * @param _amount Amount to donate in normal USDC units (e.g., 10 = 10 USDC)
      */
     function recordDonation(uint256 _fundraiserId, uint256 _amount) external nonReentrant whenNotPaused {
-        if (_fundraiserId >= state.fundraiserEventCounter) revert InvalidInput(1);
-        if (_amount == 0) revert InvalidInput(2);
-        if (msg.sender == address(0)) revert InvalidAddress();
-
+        require(_fundraiserId <= state.fundraiserEventCounter, "Invalid fundraiser ID");
+        require(_amount != 0, "Amount must be greater than 0");
+        require(msg.sender != address(0), "Invalid sender address");
+        
         Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
-
+        
         // Ensure the funding window is still open and fundraiser is not completed
-        if (block.timestamp > theFundraiser.endDate) revert FundingPeriodEnded();
-        if (FundraiserLogic.isFundraiserCompleted(theFundraiser)) revert InvalidInput(3);
+        require(block.timestamp < theFundraiser.endDate, "Must set an end date in the future");
+        require(!FundraiserLogic.isFundraiserCompleted(theFundraiser), "Fundraiser is already completed");
 
         // Convert deposit to base units
         uint256 depositInBaseUnits = _amount * state.USDC_DECIMAL_FACTOR;
-        if (uint256(theFundraiser.amountRaised) + depositInBaseUnits > type(uint128).max) revert InvalidInput(2);
-
+        require(uint256(theFundraiser.amountRaised) + depositInBaseUnits < type(uint128).max, "Amount raised would overflow");
+        
         // Update contract's internal accounting (Checks-Effects pattern)
         state.userContributions[msg.sender][_fundraiserId] += depositInBaseUnits;
         theFundraiser.amountRaised += uint128(depositInBaseUnits);
-
+        
         // Transfer USDC from the user to this contract (Interactions pattern)
         IERC20(state.usdcAddress).safeTransferFrom(msg.sender, address(this), depositInBaseUnits);
-
+        
         emit Deposit(msg.sender, _fundraiserId, depositInBaseUnits);
 
         // Deposit to Aave if enabled
@@ -224,15 +224,15 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
 
         Fundraiser storage theFundraiser = state.idToFundraiserEvent[_fundraiserId];
         if (theFundraiser.owner != msg.sender) revert InvalidInput(2);
-
+        
         // Calculate if goal reached
         bool goalReached = theFundraiser.amountRaised >= theFundraiser.fundraiserGoal;
-
+        
         // Owner can withdraw only if goal reached OR funding period ended
         if (!goalReached && block.timestamp <= theFundraiser.endDate) {
             revert WithdrawalConditionsNotMet();
         }
-
+        
         // Check if there's enough unclaimed balance
         uint256 withdrawAmount = _amount * state.USDC_DECIMAL_FACTOR;
         uint256 availableToWithdraw = theFundraiser.amountRaised - theFundraiser.claimedAmount;
@@ -292,7 +292,7 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
     {
         return state.getFundraiser(_fundraiserId);
     }
-
+    
     /**
      * @notice Helper to convert a normal USDC amount to base units (6 decimals).
      * @param _amount Normal USDC units, e.g. 10 => 10 USDC => 10,000,000 base units
@@ -505,7 +505,7 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
     function getApprovalAmount(uint256 _amount) external view returns (uint256) {
         return _amount * state.USDC_DECIMAL_FACTOR;
     }
-
+    
     /**
      * @notice Provides instructions on how to approve USDC for this contract
      * @return Instructions on how to perform the approval in Remix
@@ -513,19 +513,19 @@ contract FundraiserFactory is FundraiserStorage, Ownable, ReentrancyGuard, Pausa
     function getApprovalInstructions() external view returns (string memory) {
         return string(
             abi.encodePacked(
-                "To approve USDC spending in Remix:\n",
-                "1. Go to the 'Deploy & Run' tab\n",
-                "2. Select 'IERC20' from the contract dropdown\n",
+            "To approve USDC spending in Remix:\n",
+            "1. Go to the 'Deploy & Run' tab\n",
+            "2. Select 'IERC20' from the contract dropdown\n",
                 "3. Enter USDC address: ",
                 FundraiserLogic.addressToString(state.usdcAddress),
                 "\n",
-                "4. Click 'At Address' to load the USDC contract\n",
-                "5. Find the 'approve' function\n",
+            "4. Click 'At Address' to load the USDC contract\n",
+            "5. Find the 'approve' function\n",
                 "6. Enter this contract's address: ",
                 FundraiserLogic.addressToString(address(this)),
                 "\n",
-                "7. Enter amount with 6 decimals (e.g. 10 USDC = 10000000)\n",
-                "8. Click 'transact' to approve"
+            "7. Enter amount with 6 decimals (e.g. 10 USDC = 10000000)\n",
+            "8. Click 'transact' to approve"
             )
         );
     }
