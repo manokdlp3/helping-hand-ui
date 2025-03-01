@@ -6,11 +6,12 @@ libs = ["lib"]
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+remappings = ["@openzeppelin/=lib/openzeppelin-contracts/"]
 
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-
-# Remappings should be outside any section, or use remappings array:
-remappings = [
-  '@openzeppelin/=lib/openzeppelin-contracts/'
-]
