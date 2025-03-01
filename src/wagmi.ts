@@ -11,10 +11,10 @@ import {
 // This configuration sets up the basic parameters for our Web3 interactions
 export const config = getDefaultConfig({
   // The name that appears in wallet connection prompts
-  appName: 'Helping Hand',
+  appName: 'Web3 Learning Platform',
 
-  // Your WalletConnect v2 project ID
-  projectId: 'demo-project-id',
+  // Your WalletConnect v2 project ID (get one from cloud.walletconnect.com)
+  projectId: 'YOUR_PROJECT_ID',
 
   // The blockchain networks we want to support
   chains: [
