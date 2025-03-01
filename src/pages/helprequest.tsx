@@ -258,16 +258,12 @@ const HelpRequestPage = () => {
   };
   // Update data if we have helpRequestId
   useEffect(() => {
-    if (!contract) return;
     const { helpRequestId } = router.query;
     if (helpRequestId && typeof helpRequestId === 'string') {
       setFundraiserId(helpRequestId);
-      setResult(null);
       setError('');
       setIsLoading(true);
-      setTimeout(() => {
-        fetchFundraiserData(helpRequestId);
-      }, 50);
+      fetchFundraiserData(helpRequestId);
     }
   }, [router.query, contract]);
 
@@ -586,10 +582,6 @@ const HelpRequestPage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    // Your existing logic to fetch fundraiser data
-    fetchFundraiserData(fundraiserId);
-  }, [fetchFundraiserData, fundraiserId]); // Include fetchFundraiserData here
 
   // ============================
   //  Render
