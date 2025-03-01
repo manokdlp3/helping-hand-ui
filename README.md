@@ -25,7 +25,6 @@ $ npm install
 ```
 #### Update `.env.local`
 `NEXT_PUBLIC_API_KEY=` Enter your Humanity API Key in the env file.
-`NEXT_PUBLIC_CONTRACT_ADDRESS="0xb7336CD501e0FB525917f38599aA58107DB14663"` // Use this latest contract address
 
 #### Run
 ```shell
