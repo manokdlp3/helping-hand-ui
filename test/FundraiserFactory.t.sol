@@ -12,7 +12,7 @@ contract FundraiserFactoryTest is Test {
     MockAavePool public mockAavePool;
     MockAUSDC public mockAUSDC;
     uint256 constant USDC_DECIMALS = 6;
-
+    
     function setUp() public {
         owner = address(this);
 
@@ -256,4 +256,71 @@ contract MockAUSDC {
 
         return true;
     }
+
+    function testRecordDonationSuccess() public {
+        // Start at a known timestamp
+        vm.warp(1000000);
+
+        // Create a fundraiser with a definite future end date
+        uint64 endDate = uint64(block.timestamp + 7 days);
+        uint256 fundraiserGoal = 1000; // 1000 USDC (без учета десятичных знаков)
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", fundraiserGoal);
+
+        // Record a donation
+        uint256 donationAmount = 100; // 100 USDC
+        vm.expectEmit(true, true, true, true);
+        emit Deposit(address(this), 0, donationAmount * 10 ** USDC_DECIMALS);
+        fundraiserFactory.recordDonation(0, donationAmount);
+
+        // Check the amount raised
+        (,,,,,, uint256 amountRaised, ,) = fundraiserFactory.getFundraiser(0);
+        assertEq(amountRaised, donationAmount * 10 ** USDC_DECIMALS);
+    }
+
+    function testRecordDonationInvalidFundraiser() public {
+        vm.expectRevert(FundraiserStorage.InvalidInput.selector);
+        fundraiserFactory.recordDonation(999, 100); // Invalid fundraiser ID
+    }
+
+    function testRecordDonationZeroAmount() public {
+        // Start at a known timestamp
+        vm.warp(1000000);
+        uint64 endDate = uint64(block.timestamp + 7 days);
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", 1000);
+
+        vm.expectRevert(FundraiserStorage.InvalidInput.selector);
+        fundraiserFactory.recordDonation(0, 0); // Zero amount
+    }
+
+    function testRecordDonationPastEndDate() public {
+        // Start at a known timestamp
+        vm.warp(1000000);
+        uint64 endDate = uint64(block.timestamp + 1 days);
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", 1000);
+
+        // Warp to past end date
+        vm.warp(1000001);
+        vm.expectRevert(FundraiserStorage.FundingPeriodEnded.selector);
+        fundraiserFactory.recordDonation(0, 100); // Attempt to donate after end date
+    }
+
+    function testRecordDonationExceedsMax() public {
+        // Start at a known timestamp
+        vm.warp(1000000);
+        uint64 endDate = uint64(block.timestamp + 7 days);
+        fundraiserFactory.addFundraiser(endDate, "Test Fundraiser", "Test description", 1000);
+
+        // Set the maximum amount raised to the limit
+        uint256 maxAmount = type(uint128).max / 10 ** USDC_DECIMALS;
+        fundraiserFactory.recordDonation(0, maxAmount);
+
+        // Attempt to exceed the maximum
+        vm.expectRevert(FundraiserStorage.InvalidInput.selector);
+        fundraiserFactory.recordDonation(0, 1); // This should fail
+    }
+
+    // Gas optimization suggestions:
+    // - Consider using `uint128` for amounts in the recordDonation function to save gas.
+    // - Use `require` statements instead of `if` checks for input validation to reduce gas costs.
+    // - Optimize the storage layout to minimize the number of SLOAD operations.
 }

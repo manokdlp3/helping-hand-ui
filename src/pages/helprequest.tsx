@@ -1,8 +1,8 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useCallback } from 'react';
 import { ethers, Contract } from 'ethers';
 import contractABI from './abi.json';
+import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress, CircularProgress, Alert } from '@mui/material';
 import usdcABI from '../../abi/testnet/usdc-abi.json';
-import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress, Alert } from '@mui/material';
 import Head from 'next/head';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
@@ -103,7 +103,7 @@ const HelpRequestPage = () => {
           }
         }
       } catch (err) {
-        console.error('Error initializing contract:', err);
+        console.error('Error initializing contract:&apos;', err);
         setError('Failed to initialize contract. Please check your connection.');
         setIsLoading(false);
       }
@@ -213,6 +213,7 @@ const HelpRequestPage = () => {
     };
 
     tryFetch();
+
   };
 
   // Switch to next provider if needed
@@ -584,6 +585,11 @@ const HelpRequestPage = () => {
       console.log(`Current URL: ${window.location.href}`);
     }
   }, []);
+
+  useEffect(() => {
+    // Your existing logic to fetch fundraiser data
+    fetchFundraiserData(fundraiserId);
+  }, [fetchFundraiserData, fundraiserId]); // Include fetchFundraiserData here
 
   // ============================
   //  Render

@@ -611,11 +611,10 @@ export default function LendAHand() {
                 onClick={() => handleCardClick(request.id)}
               >
                 <div className="aspect-video relative">
-                  <img 
-                    src={request.imageUrl} 
-                    alt={request.title}
-                    className="object-cover w-full h-full"
-                  />
+                  const imageObject = new Image();
+                  imageObject.src = request.imageUrl;
+                  imageObject.alt = request.title;
+                  imageObject.className=&quot;object-cover w-full h-full&quot;;
                   <div className="absolute bottom-0 left-0 p-2 bg-black/50 text-white">
                     {request.location}
                   </div>
