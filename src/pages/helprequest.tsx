@@ -1,7 +1,7 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { ethers, Contract } from 'ethers';
 import contractABI from './abi.json';
-import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress } from '@mui/material';
+import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress, CircularProgress, Alert } from '@mui/material';
 import Head from 'next/head';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
@@ -14,6 +14,17 @@ declare global {
     ethereum?: any;
   }
 }
+
+// Multiple RPC providers for better reliability
+const RPC_PROVIDERS = [
+  "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
+  "https://eth-sepolia.g.alchemy.com/v2/demo",
+  "https://rpc.sepolia.org",
+  "https://rpc2.sepolia.org"
+];
+
+// Utility function for delay (for retry logic)
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const HelpRequestPage = () => {
   const [contract, setContract] = useState<Contract | null>(null);
@@ -41,48 +52,66 @@ const HelpRequestPage = () => {
 
   const router = useRouter();
 
-  // Initialize contract instance
+  // Initialize contract with multiple providers and retry logic
   useEffect(() => {
     const initializeContract = async () => {
-      const contractAddress = "0x308A7629a5C39f9073D4617A4e95A205d4474E07";
-      
-      // Fix the ethereum property issue - we need to handle this safely
-      if (typeof window !== 'undefined') {
-        try {
-          // Check if ethereum is available without trying to set it
+      try {
+        const contractAddress = "0x308A7629a5C39f9073D4617A4e95A205d4474E07";
+        
+        if (typeof window !== 'undefined') {
           if (window.ethereum) {
             console.log("Found Web3 provider - using BrowserProvider");
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const signer = await provider.getSigner();
-            const contractInstance = new Contract(contractAddress, contractABI, signer);
-            setContract(contractInstance);
+            try {
+              const provider = new ethers.BrowserProvider(window.ethereum);
+              const signer = await provider.getSigner();
+              const contractInstance = new Contract(contractAddress, contractABI, signer);
+              setContract(contractInstance);
+            } catch (signerErr) {
+              console.error("Error getting signer:", signerErr);
+              
+              // If failed to get signer, use read-only mode with fallback providers
+              await connectWithFallbackProviders(contractAddress);
+            }
           } else {
-            // Fallback to read-only if ethereum is not available
+            // Use read-only provider with fallback if ethereum is not available
             console.log("No Web3 provider found - using read-only provider");
-            const provider = new ethers.JsonRpcProvider("https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
-            const contractInstance = new Contract(contractAddress, contractABI, provider);
-            setContract(contractInstance);
-          }
-        } catch (err) {
-          console.error('Error initializing contract:', err);
-          // Provide a more user-friendly error message
-          setError('Failed to initialize contract. Please make sure your wallet is connected.');
-          
-          // Try with read-only provider as a fallback
-          try {
-            console.log("Falling back to read-only provider");
-            const provider = new ethers.JsonRpcProvider("https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161");
-            const contractInstance = new Contract(contractAddress, contractABI, provider);
-            setContract(contractInstance);
-          } catch (fallbackErr) {
-            console.error('Error with fallback provider:', fallbackErr);
+            await connectWithFallbackProviders(contractAddress);
           }
         }
-      } else {
-        // Server-side rendering case
-        console.log("Server-side rendering detected - deferring contract initialization");
+      } catch (err) {
+        console.error('Error initializing contract:', err);
+        setError('Failed to initialize contract. Please check your connection.');
+        setIsLoading(false);
       }
     };
+
+    // Function to try connecting with multiple providers
+    const connectWithFallbackProviders = async (contractAddress: string) => {
+      // Try each provider in sequence
+      for (let i = 0; i < RPC_PROVIDERS.length; i++) {
+        try {
+          console.log(`Trying provider ${i+1}/${RPC_PROVIDERS.length}: ${RPC_PROVIDERS[i]}`);
+          const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[i]);
+          
+          // Test the provider with a simple call
+          await provider.getBlockNumber();
+          
+          const contractInstance = new Contract(contractAddress, contractABI, provider);
+          setContract(contractInstance);
+          console.log(`Successfully connected using provider ${i+1}`);
+          return; // Exit if successful
+        } catch (providerErr) {
+          console.error(`Provider ${i+1} failed:`, providerErr);
+          // Continue to next provider
+        }
+      }
+      
+      // If all providers failed
+      console.error("All providers failed to connect");
+      setError("Failed to connect to blockchain network. Please check your internet connection.");
+      setIsLoading(false);
+    };
+
     initializeContract();
   }, []);
 
@@ -118,81 +147,100 @@ const HelpRequestPage = () => {
 
   // Separate function to fetch fundraiser data by ID
   const fetchFundraiserData = async (id: string) => {
-    console.log(`Fetching fundraiser data for ID ${id}`);
+    setIsLoading(true);
+    setError('');
     
-    try {
-      if (!contract) {
-        setError('Contract not initialized');
-        setIsLoading(false);
-        return;
-      }
-      
-      if (!id || id === '') {
-        setError('Invalid fundraiser ID');
-        setIsLoading(false);
-        return;
-      }
-      
-      // Call contract to get fundraiser data
-      try {
-        const data = await contract.getFundraiser(id);
-        console.log(`Raw fundraiser data for ID ${id}:`, data);
-        
-        // Check if we have actual data (sometimes the contract returns empty data)
-        if (!data || !data[3]) { // subject is at index 3
-          setError(`Fundraiser #${id} not found. This fundraiser either doesn't exist or has been removed.`);
-          setIsLoading(false);
-          return;
-        }
-        
-        // Process and format data
-        const amountNeededRaw = parseFloat(ethers.formatUnits(data[5], 6));
-        const amountCollectedRaw = parseFloat(ethers.formatUnits(data[6], 6));
-        
-        // Create formatted result object
-        const formatted = {
-          id: id, // Use the ID that was passed to this function
-          owner: data[0],
-          startDate: new Date(Number(data[1]) * 1000).toLocaleDateString(),
-          endDate: new Date(Number(data[2]) * 1000).toLocaleDateString(),
-          subject: data[3],
-          additionalDetails: data[4],
-          amountNeededRaw,
-          amountCollectedRaw,
-          amountNeeded: formatUSDC(amountNeededRaw),
-          amountCollected: formatUSDC(amountCollectedRaw),
-          isCompleted: data[7],
-          goalReached: data[8]
-        };
-        
-        console.log(`Formatted fundraiser data for ID ${id}:`, formatted);
-        setResult(formatted);
-      } catch (contractErr: any) {
-        console.error(`Contract error for fundraiser ${id}:`, contractErr);
-        // This is specifically for handling the "missing revert data" error
-        if (contractErr.message && contractErr.message.includes('missing revert data')) {
-          setError(`Fundraiser #${id} not found. The fundraiser does not exist on the blockchain.`);
-        } else {
-          setError(`Error loading fundraiser #${id}: ${contractErr.message || 'Contract error'}`);
-        }
-      }
-      
-    } catch (err: any) {
-      console.error(`Error getting fundraiser ${id}:`, err);
-      
-      if (err.message && (
-        err.message.includes('reverted') || 
-        err.message.includes('invalid BigInt') || 
-        err.message.includes('out of bounds') || 
-        err.message.includes('missing revert data')
-      )) {
-        setError(`Fundraiser #${id} not found. This fundraiser either doesn't exist or has been removed.`);
-      } else {
-        setError(`Unable to load fundraiser: ${err.message || 'Unknown error'}`);
-      }
-    } finally {
+    if (!contract) {
+      setError("Contract not initialized. Please try again later.");
       setIsLoading(false);
+      return;
     }
+    
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Calling contract.getFundraiser - Attempt ${attempt}/${maxRetries}`);
+        const result = await contract.getFundraiser(id);
+        console.log("Fundraiser result:", result);
+        
+        // Process fundraiser data
+        const owner = result[0];
+        const startDate = new Date(Number(result[1]) * 1000);
+        const endDate = new Date(Number(result[2]) * 1000);
+        const subject = result[3];
+        const details = result[4];
+        const goal = parseFloat(ethers.formatUnits(result[5], 6));
+        const amountRaised = parseFloat(ethers.formatUnits(result[6], 6));
+        const isCompleted = result[7];
+        const goalReached = result[8];
+        
+        setResult({
+          id: Number(id),
+          owner,
+          startDate,
+          endDate,
+          subject,
+          details,
+          goal,
+          amountRaised,
+          isCompleted,
+          goalReached
+        });
+        
+        setIsLoading(false);
+        return; // Success! Exit the retry loop
+      } catch (contractErr: any) {
+        console.error(`Error fetching fundraiser (attempt ${attempt}/${maxRetries}):`, contractErr);
+        
+        if (attempt < maxRetries) {
+          // Wait longer between each retry (exponential backoff)
+          const backoffTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
+          console.log(`Waiting ${backoffTime}ms before retry...`);
+          await delay(backoffTime);
+          
+          // Try with a different provider if not using wallet provider
+          if (typeof window !== 'undefined' && !window.ethereum) {
+            await tryNextProvider(contract?.target as string);
+          }
+          
+          continue;
+        }
+        
+        // Log technical details to console, but show user-friendly message
+        if (contractErr.message && contractErr.message.includes('missing revert data')) {
+          setError(`Couldn't parse contract data, please click the refresh button.`);
+        } else {
+          setError(`We're having trouble connecting to the blockchain. Please try refreshing the page.`);
+        }
+        
+        setIsLoading(false);
+      }
+    }
+  };
+  
+  // Try the next RPC provider if current one fails
+  const tryNextProvider = async (contractAddress: string) => {
+    if (!contractAddress) return false;
+    
+    for (let i = 0; i < RPC_PROVIDERS.length; i++) {
+      try {
+        console.log(`Trying alternative provider ${i+1}/${RPC_PROVIDERS.length}`);
+        const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[i]);
+        
+        // Test the provider with a simple call
+        await provider.getBlockNumber();
+        
+        // Create new contract instance with this provider
+        const contractInstance = new Contract(contractAddress, contractABI, provider);
+        setContract(contractInstance);
+        console.log(`Successfully switched to provider ${i+1}`);
+        return true;
+      } catch (err) {
+        console.error(`Failed to use provider ${i+1}:`, err);
+      }
+    }
+    
+    return false;
   };
 
   // Update handleGetFundraiser to use fetchFundraiserData
@@ -326,7 +374,7 @@ const HelpRequestPage = () => {
       setShowDonationInput(false);
       
       // Refresh the current fundraiser data
-      fetchFundraiserData(currentFundraiserId);
+      fetchFundraiserData(currentFundraiserId.toString());
       
     } catch (err: any) {
       console.error('Donation error:', err);
@@ -516,11 +564,11 @@ const HelpRequestPage = () => {
                   </Typography>
                   
                   <Typography variant="subtitle2" gutterBottom>
-                    <strong>Start:</strong> {result.startDate}
+                    <strong>Start:</strong> {result.startDate.toLocaleDateString()}
                   </Typography>
                   
                   <Typography variant="subtitle2" gutterBottom>
-                    <strong>End:</strong> {result.endDate}
+                    <strong>End:</strong> {result.endDate.toLocaleDateString()}
                   </Typography>
                   
                   <Typography variant="subtitle2" gutterBottom>
@@ -550,7 +598,7 @@ const HelpRequestPage = () => {
                         whiteSpace: 'pre-line',
                       }}
                     >
-                      {result.additionalDetails}
+                      {result.details}
                     </Typography>
                   </Box>
                 </Paper>
@@ -567,12 +615,12 @@ const HelpRequestPage = () => {
                   }}
                 >
                   <Typography variant="h4" gutterBottom>
-                    {result.amountCollected}
+                    {formatUSDC(result.amountRaised)}
                   </Typography>
                   
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      collected of {result.amountNeeded}
+                      collected of {formatUSDC(result.goal)}
                     </Typography>
                     
                     {/* Progress Bar */}
@@ -581,8 +629,8 @@ const HelpRequestPage = () => {
                         variant="determinate" 
                         value={(() => {
                           // Безопасный расчет процента выполнения
-                          if (!result.amountNeededRaw || result.amountNeededRaw <= 0) return 0;
-                          const percent = (result.amountCollectedRaw / result.amountNeededRaw) * 100;
+                          if (!result.goal || result.goal <= 0) return 0;
+                          const percent = (result.amountRaised / result.goal) * 100;
                           return isNaN(percent) ? 0 : Math.min(percent, 100);
                         })()}
                         sx={{ 
@@ -601,8 +649,8 @@ const HelpRequestPage = () => {
                       <Typography variant="body2" color="text.secondary">
                         {(() => {
                           // Безопасный расчет процента выполнения для текста
-                          if (!result.amountNeededRaw || result.amountNeededRaw <= 0) return '0';
-                          const percent = Math.round((result.amountCollectedRaw / result.amountNeededRaw) * 100);
+                          if (!result.goal || result.goal <= 0) return '0';
+                          const percent = Math.round((result.amountRaised / result.goal) * 100);
                           return isNaN(percent) ? '0' : percent;
                         })()}% completed
                       </Typography>
@@ -675,25 +723,36 @@ const HelpRequestPage = () => {
               backgroundColor: '#ffebee'
             }}
           >
-            <Typography variant="h6" sx={{ color: 'error.main' }} gutterBottom>
-              Fundraiser Not Found
-            </Typography>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              {error || `No data found for fundraiser #${router.query.helpRequestId}. The fundraiser may not exist.`}
-            </Typography>
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: {xs: 'column', sm: 'row'}, alignItems: 'center', mb: 2 }}>
+              <Box sx={{ mr: 2, mb: {xs: 2, sm: 0}, textAlign: {xs: 'center', sm: 'left'} }}>
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-1-5h2v2h-2v-2zm0-8h2v6h-2V7z" fill="#f44336" />
+                </svg>
+              </Box>
+              <Box>
+                <Typography variant="h6" sx={{ color: 'error.main' }} gutterBottom>
+                  Fundraiser Not Found
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {error}
+                </Typography>
+              </Box>
+            </Box>
+            <Box sx={{ mt: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Button 
                 onClick={() => {
-                  console.log("Redirecting to fundraiser #0");
-                  // Reset states
-                  setResult(null);
-                  setError('');
-                  // Use the baseUrl to preserve the port
-                  const baseUrl = window.location.origin;
-                  console.log(`Redirecting to: ${baseUrl}/helprequest?helpRequestId=0`);
-                  window.location.href = `${baseUrl}/helprequest?helpRequestId=0`;
+                  window.location.reload();
                 }}
                 className="bg-primary"
+              >
+                Refresh Page
+              </Button>
+              <Button 
+                onClick={() => {
+                  navigateToFundraiser('0');
+                }}
+                variant="outline"
+                className="border-primary text-primary"
               >
                 Go to Fundraiser #0
               </Button>
