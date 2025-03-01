@@ -35,7 +35,7 @@ export default function LendAHand() {
   useEffect(() => {
     const initializeContract = () => {
       try {
-        const contractAddress = "0x308A7629a5C39f9073D4617A4e95A205d4474E07";
+        const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as string;
         
         // Check for ethereum without trying to modify it
         if (typeof window !== 'undefined') {
