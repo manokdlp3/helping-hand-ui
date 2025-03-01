@@ -1,4 +1,4 @@
-import { useState, useEffect, ChangeEvent } from 'react';
+import { useState, useEffect, ChangeEvent, useCallback } from 'react';
 import { ethers, Contract } from 'ethers';
 import contractABI from './abi.json';
 import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress, CircularProgress, Alert } from '@mui/material';
@@ -115,7 +115,7 @@ const HelpRequestPage = () => {
           }
         }
       } catch (err) {
-        console.error('Error initializing contract:', err);
+        console.error('Error initializing contract:&apos;', err);
         setError('Failed to initialize contract. Please check your connection.');
         setIsLoading(false);
       }
@@ -211,9 +211,8 @@ const HelpRequestPage = () => {
     };
     
     tryFetch();
-  };
-  
-  // Try the next RPC provider if current one fails
+  }
+
   const tryNextProvider = (contractAddress: string) => {
     if (!contractAddress) return Promise.reject(false);
     
@@ -605,6 +604,11 @@ const HelpRequestPage = () => {
       console.log(`Current origin: ${window.location.origin}`);
     }
   }, []);
+
+  useEffect(() => {
+    // Your existing logic to fetch fundraiser data
+    fetchFundraiserData(fundraiserId);
+  }, [fetchFundraiserData, fundraiserId]); // Include fetchFundraiserData here
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">

@@ -115,7 +115,7 @@ const Verify: NextPage = () => {
             Great! We can help you.
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            First, let's get you verified.
+            First, let&apos;s get you verified.
           </p>
         </div>
 
