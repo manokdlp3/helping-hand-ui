@@ -1,191 +1,121 @@
-import { useState } from 'react';
-import { useRouter } from 'next/router';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import type { NextPage } from 'next';
 import Head from 'next/head';
+import Link from 'next/link';
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { useState } from 'react';
+import vc from './vc.json';
+import id from './id.json';
+import { CheckCircle } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
-import { Typography, Container, Paper, Box, TextField, Stack } from '@mui/material';
-import { Button } from "@/components/ui/button";
+import { useRouter } from 'next/router';
 import { useVerification } from '@/contexts/VerificationContext';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, CheckCircle } from 'lucide-react';
 
-export default function VerifyPage() {
+// Add this at the top of the component to make external links more secure
+const externalLinkProps = {
+  target: "_blank",
+  rel: "noopener noreferrer"
+};
+
+const apiKey = process.env.NEXT_PUBLIC_API_KEY;
+
+const Verify: NextPage = () => {
+  const { setVerified } = useVerification();
+  const [apiResponse, setApiResponse] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);  
   const router = useRouter();
-  const { isVerified, setVerified } = useVerification();
-  
-  // Mock verification states
-  const [email, setEmail] = useState<string>('');
-  const [name, setName] = useState<string>('');
-  const [phone, setPhone] = useState<string>('');
-  const [verifying, setVerifying] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<boolean>(false);
-  
-  // Простая валидация email
-  const isValidEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-  
-  // Обработчик верификации
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+
+  const handleVerification = async () => {
     try {
-      setVerifying(true);
-      setError(null);
+      setIsLoading(true);
+      const response = await fetch(process.env.NEXT_PUBLIC_API_VERIFY_VC || '', {
+        method: 'POST',
+        headers: {
+          "X-API-Token": apiKey || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(vc),
+      });
+      const data = await response.json();
+      console.log('API Response:', data);
+      setApiResponse(data.message);
       
-      // Проверяем форму
-      if (!name.trim()) throw new Error('Please enter your name');
-      if (!email.trim() || !isValidEmail(email)) throw new Error('Please enter a valid email');
-      if (!phone.trim()) throw new Error('Please enter your phone number');
-      
-      // Здесь в будущем будет вызов реального API для верификации
-      // Пока просто имитируем задержку
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      // Устанавливаем статус верификации
-      setVerified(true);
-      setSuccess(true);
-      
-      // Перенаправляем после успешной верификации
-      setTimeout(() => {
-        // Перенаправляем на страницу запроса помощи или откуда пришли
-        const { returnUrl } = router.query;
-        router.push(typeof returnUrl === 'string' ? returnUrl : '/');
-      }, 2000);
-    } catch (err: any) {
-      console.error('Verification error:', err);
-      setError(err.message || 'Verification failed');
+      if (data.isValid === true) {
+        // Short delay to show success message before redirecting
+        setTimeout(() => {
+          handleVerificationSuccess();
+        }, 1500);
+      }
+    } catch (error) {
+      setApiResponse('Error: Failed to verify credentials');
+      console.error('Verification failed:', error);
     } finally {
-      setVerifying(false);
+      setIsLoading(false);
     }
   };
-  
-  // Если пользователь уже верифицирован, показываем соответствующее сообщение
-  if (isVerified && !success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
-        <Head>
-          <title>Verification - Helping Hand</title>
-          <meta
-            content="Verify your identity to use the Helping Hand platform"
-            name="description"
-          />
-          <link href="/favicon.ico" rel="icon" />
-        </Head>
 
-        <Navigation isVerified={isVerified} onAskForHelp={() => router.push('/createhelprequest')} />
+  const handleVerificationSuccess = () => {
+    setVerified(true);
+    router.push('/helpme');
+  };
 
-        <Container maxWidth="sm" sx={{ py: 8 }}>
-          <Paper sx={{ p: 4 }}>
-            <Box sx={{ textAlign: 'center' }}>
-              <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
-              <Typography variant="h4" gutterBottom>Already Verified</Typography>
-              <Typography variant="body1" paragraph>
-                Your account is already verified. You can now create help requests and contribute to others.
-              </Typography>
-              <Button
-                className="mt-4"
-                onClick={() => router.push('/lendahand')}
-              >
-                Browse Help Requests
-              </Button>
-            </Box>
-          </Paper>
-        </Container>
+  const handleLendAHand = () => {
+    if (!isVerified) {
+      router.push('/verify');
+      return;
+    }
+    router.push('/helpme');
+  };
 
-        <Footer />
-      </div>
-    );
-  }
-  
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
       <Head>
-        <title>Verification - Helping Hand</title>
+        <title>Helping Hand - Crowd Funding on Blockchain</title>
         <meta
-          content="Verify your identity to use the Helping Hand platform"
+          content="A platform for crowdfunding on blockchain"
           name="description"
         />
         <link href="/favicon.ico" rel="icon" />
       </Head>
 
-      <Navigation isVerified={isVerified} onAskForHelp={() => router.push('/createhelprequest')} />
+      <Navigation isVerified={isVerified} onAskForHelp={handleLendAHand} />
 
-      <Container maxWidth="sm" sx={{ py: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center" className="font-bold mb-8 bg-gradient-to-r from-green-800 to-green-500 bg-clip-text text-transparent">
-          Verify Your Identity
-        </Typography>
-        
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>
-              {error}
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {success && (
-          <Alert className="mb-6 bg-green-50 border-green-500">
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <AlertTitle>Successfully Verified</AlertTitle>
-            <AlertDescription>
-              Your identity has been verified! Redirecting you...
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <Paper sx={{ p: 4 }}>
-          <Typography variant="body1" paragraph>
-            To ensure the safety and trust of our community, we need to verify your identity before you can create help requests.
-          </Typography>
+      <main className="container mx-auto p-8 max-w-4xl">
+        {/* Enhanced Hero Section */}
+        <div className="text-center mb-16 py-12 px-4">
+          <h1 className="text-5xl font-extrabold tracking-tight lg:text-6xl mb-6 bg-gradient-to-r from-green-800 to-green-500 bg-clip-text text-transparent animate-fade-in">
+            Great! We can help you.
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            First, let's get you verified.
+          </p>
+        </div>
+
+        <div className="text-center mb-16 py-12 px-4">
+          <Button 
+            variant="destructive" 
+            onClick={handleVerification}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Processing...' : 'Verify'}
+          </Button>
           
-          <form onSubmit={handleVerify}>
-            <Stack spacing={3}>
-              <TextField
-                label="Full Name"
-                fullWidth
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={verifying || success}
-                required
-              />
-              
-              <TextField
-                label="Email Address"
-                type="email"
-                fullWidth
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={verifying || success}
-                required
-              />
-              
-              <TextField
-                label="Phone Number"
-                fullWidth
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                disabled={verifying || success}
-                required
-              />
-              
-              <Button
-                className="w-full py-6 text-lg font-semibold mt-4" 
-                size="lg"
-                type="submit"
-                disabled={verifying || success}
-              >
-                {verifying ? 'Verifying...' : 'Verify Identity'}
-              </Button>
-            </Stack>
-          </form>
-        </Paper>
-      </Container>
+          {apiResponse && (
+            <div className="mt-4 p-4 rounded-lg bg-secondary/30">
+              <p className="text-foreground">{apiResponse}</p>
+            </div>
+          )}
+        </div>
+
+      </main>
 
       <Footer />
     </div>
   );
-}
+};
+
+export default Verify;
