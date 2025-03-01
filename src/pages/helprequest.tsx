@@ -2,7 +2,7 @@ import { useState, useEffect, ChangeEvent, useCallback } from 'react';
 import { ethers, Contract } from 'ethers';
 import contractABI from './abi.json';
 import { Box, TextField, Typography, Container, Paper, Grid, LinearProgress, CircularProgress, Alert } from '@mui/material';
-import Head from 'next/head';
+import Head from "next/head";
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
 import { Button } from "@/components/ui/button";

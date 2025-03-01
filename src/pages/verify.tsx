@@ -1,7 +1,7 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import type { NextPage } from 'next';
-import Head from 'next/head';
-import Link from 'next/link';
+import type { NextPage } from 'next'; // Updated import for Next.js types
+import Head from 'next/head'; // Updated import for Next.js document
+import Link from 'next/link'; // Updated import for Next.js router
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -9,7 +9,7 @@ import { useState, useRef } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { Navigation } from '@/components/Navigation';
 import { Footer } from '@/components/Footer';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/router'; // Updated import for useRouter
 import { useVerification } from '@/contexts/VerificationContext';
 
 // Add this at the top of the component to make external links more secure
