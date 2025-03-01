@@ -31,6 +31,8 @@ const HelpRequestPage = () => {
   
   // Form states
   const [fundraiserId, setFundraiserId] = useState<string>('0');
+  const [showDonationInput, setShowDonationInput] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Result states
   const [result, setResult] = useState<Fundraiser | null>(null);
