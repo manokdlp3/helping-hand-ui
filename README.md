@@ -11,7 +11,7 @@ On Helping Hand, anyone with a wallet can donate. However, only verified users c
 
 **Roman** - (Founder) His favorite color is Violet, he missed a plane once and found the love of his life. Miracles do happen! LET'S GO ASF AMPL TOKENS!
 
-**Dylan** - (Founder) Can eat six tacos in one sitting.
+**Dylan** - (Founder) Studying computer science at the University of Michigan. Mostly experienced with front end development and a little bit of Python. Currently working at a tier 1 exchange with the goal of becoming an engineer.
 
 ### Testing Instructions
 #### Download
