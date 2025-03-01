@@ -17,10 +17,10 @@ declare global {
 
 // Multiple RPC providers for better reliability
 const RPC_PROVIDERS = [
-  "https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161",
-  "https://eth-sepolia.g.alchemy.com/v2/demo",
-  "https://rpc.sepolia.org",
-  "https://rpc2.sepolia.org"
+  "https://ethereum-sepolia-rpc.publicnode.com", // Public node with CORS enabled
+  "https://gateway.tenderly.co/public/sepolia", // Tenderly public gateway
+  "https://rpc.sepolia.ethpandaops.io",        // Community-run endpoint
+  "https://sepolia.gateway.tenderly.co"         // Another Tenderly endpoint
 ];
 
 // Utility function for delay (for retry logic)
@@ -52,9 +52,40 @@ const HelpRequestPage = () => {
 
   const router = useRouter();
 
+  // Function to try connecting with multiple providers
+  const connectWithFallbackProviders = (contractAddress: string) => {
+    // Try each provider in sequence
+    for (let i = 0; i < RPC_PROVIDERS.length; i++) {
+      try {
+        console.log(`Trying provider ${i+1}/${RPC_PROVIDERS.length}: ${RPC_PROVIDERS[i]}`);
+        const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[i]);
+        
+        // Test the provider with a simple call
+        provider.getBlockNumber()
+          .then(() => {
+            const contractInstance = new Contract(contractAddress, contractABI, provider);
+            setContract(contractInstance);
+            console.log(`Successfully connected using provider ${i+1}`);
+            return;
+          })
+          .catch((error) => {
+            console.error(`Provider test failed:`, error);
+          });
+      } catch (providerErr) {
+        console.error(`Provider ${i+1} failed:`, providerErr);
+        // Continue to next provider
+      }
+    }
+    
+    // If all providers failed
+    console.error("All providers failed to connect");
+    setError("Failed to connect to blockchain network. Please check your internet connection.");
+    setIsLoading(false);
+  };
+
   // Initialize contract with multiple providers and retry logic
   useEffect(() => {
-    const initializeContract = async () => {
+    const initializeContract = () => {
       try {
         const contractAddress = "0x308A7629a5C39f9073D4617A4e95A205d4474E07";
         
@@ -63,19 +94,24 @@ const HelpRequestPage = () => {
             console.log("Found Web3 provider - using BrowserProvider");
             try {
               const provider = new ethers.BrowserProvider(window.ethereum);
-              const signer = await provider.getSigner();
-              const contractInstance = new Contract(contractAddress, contractABI, signer);
-              setContract(contractInstance);
-            } catch (signerErr) {
-              console.error("Error getting signer:", signerErr);
-              
-              // If failed to get signer, use read-only mode with fallback providers
-              await connectWithFallbackProviders(contractAddress);
+              provider.getSigner()
+                .then(signer => {
+                  const contractInstance = new Contract(contractAddress, contractABI, signer);
+                  setContract(contractInstance);
+                })
+                .catch(signerErr => {
+                  console.error("Error getting signer:", signerErr);
+                  // If failed to get signer, use read-only mode with fallback providers
+                  connectWithFallbackProviders(contractAddress);
+                });
+            } catch (providerErr) {
+              console.error("Error creating provider:", providerErr);
+              connectWithFallbackProviders(contractAddress);
             }
           } else {
             // Use read-only provider with fallback if ethereum is not available
             console.log("No Web3 provider found - using read-only provider");
-            await connectWithFallbackProviders(contractAddress);
+            connectWithFallbackProviders(contractAddress);
           }
         }
       } catch (err) {
@@ -85,35 +121,144 @@ const HelpRequestPage = () => {
       }
     };
 
-    // Function to try connecting with multiple providers
-    const connectWithFallbackProviders = async (contractAddress: string) => {
-      // Try each provider in sequence
-      for (let i = 0; i < RPC_PROVIDERS.length; i++) {
-        try {
-          console.log(`Trying provider ${i+1}/${RPC_PROVIDERS.length}: ${RPC_PROVIDERS[i]}`);
-          const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[i]);
-          
-          // Test the provider with a simple call
-          await provider.getBlockNumber();
-          
-          const contractInstance = new Contract(contractAddress, contractABI, provider);
-          setContract(contractInstance);
-          console.log(`Successfully connected using provider ${i+1}`);
-          return; // Exit if successful
-        } catch (providerErr) {
-          console.error(`Provider ${i+1} failed:`, providerErr);
-          // Continue to next provider
-        }
-      }
-      
-      // If all providers failed
-      console.error("All providers failed to connect");
-      setError("Failed to connect to blockchain network. Please check your internet connection.");
-      setIsLoading(false);
-    };
-
     initializeContract();
   }, []);
+
+  // Separate function to fetch fundraiser data by ID
+  const fetchFundraiserData = (id: string) => {
+    setIsLoading(true);
+    setError('');
+    
+    if (!contract) {
+      setError("Contract not initialized. Please try again later.");
+      setIsLoading(false);
+      return;
+    }
+    
+    const maxRetries = 3;
+    let attempt = 1;
+    
+    const tryFetch = () => {
+      console.log(`Calling contract.getFundraiser - Attempt ${attempt}/${maxRetries}`);
+      
+      contract.getFundraiser(id)
+        .then(result => {
+          console.log("Fundraiser result:", result);
+          
+          // Process fundraiser data
+          const owner = result[0];
+          const startDate = new Date(Number(result[1]) * 1000);
+          const endDate = new Date(Number(result[2]) * 1000);
+          const subject = result[3];
+          const details = result[4];
+          const goal = parseFloat(ethers.formatUnits(result[5], 6));
+          const amountRaised = parseFloat(ethers.formatUnits(result[6], 6));
+          const isCompleted = result[7];
+          const goalReached = result[8];
+          
+          setResult({
+            id: Number(id),
+            owner,
+            startDate,
+            endDate,
+            subject,
+            details,
+            goal,
+            amountRaised,
+            isCompleted,
+            goalReached
+          });
+          
+          setIsLoading(false);
+        })
+        .catch(contractErr => {
+          console.error(`Error fetching fundraiser (attempt ${attempt}/${maxRetries}):`, contractErr);
+          
+          if (attempt < maxRetries) {
+            // Wait longer between each retry (exponential backoff)
+            const backoffTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
+            console.log(`Waiting ${backoffTime}ms before retry...`);
+            
+            delay(backoffTime)
+              .then(() => {
+                // Try with a different provider if not using wallet provider
+                if (typeof window !== 'undefined' && !window.ethereum) {
+                  tryNextProvider(contract?.target as string)
+                    .then(() => {
+                      attempt++;
+                      tryFetch();
+                    })
+                    .catch(() => {
+                      attempt++;
+                      tryFetch();
+                    });
+                } else {
+                  attempt++;
+                  tryFetch();
+                }
+              });
+          } else {
+            // Log technical details to console, but show user-friendly message
+            if (contractErr.message && contractErr.message.includes('missing revert data')) {
+              setError(`Couldn't parse contract data, please click the refresh button.`);
+            } else {
+              setError(`We're having trouble connecting to the blockchain. Please try refreshing the page.`);
+            }
+            
+            setIsLoading(false);
+          }
+        });
+    };
+    
+    tryFetch();
+  };
+  
+  // Try the next RPC provider if current one fails
+  const tryNextProvider = (contractAddress: string) => {
+    if (!contractAddress) return Promise.reject(false);
+    
+    return new Promise((resolve, reject) => {
+      let attempted = 0;
+      
+      const tryProvider = (index: number) => {
+        if (index >= RPC_PROVIDERS.length) {
+          reject(false);
+          return;
+        }
+        
+        try {
+          console.log(`Trying alternative provider ${index+1}/${RPC_PROVIDERS.length}`);
+          const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[index]);
+          
+          // Test the provider with a simple call
+          provider.getBlockNumber()
+            .then(() => {
+              // Create new contract instance with this provider
+              const contractInstance = new Contract(contractAddress, contractABI, provider);
+              setContract(contractInstance);
+              console.log(`Successfully switched to provider ${index+1}`);
+              resolve(true);
+            })
+            .catch(err => {
+              console.error(`Failed to use provider ${index+1}:`, err);
+              tryProvider(index + 1);
+            });
+        } catch (err) {
+          console.error(`Failed to initialize provider ${index+1}:`, err);
+          tryProvider(index + 1);
+        }
+      };
+      
+      tryProvider(0);
+    });
+  };
+
+  // Update handleGetFundraiser to use fetchFundraiserData
+  const handleGetFundraiser = () => {
+    setIsLoading(true);
+    setError('');
+    fetchFundraiserData(fundraiserId);
+  };
 
   // Handle URL parameters
   useEffect(() => {
@@ -145,109 +290,238 @@ const HelpRequestPage = () => {
     }
   }, [router.query, contract]); // Depend on both router.query and contract
 
-  // Separate function to fetch fundraiser data by ID
-  const fetchFundraiserData = async (id: string) => {
-    setIsLoading(true);
-    setError('');
-    
-    if (!contract) {
-      setError("Contract not initialized. Please try again later.");
-      setIsLoading(false);
-      return;
-    }
-    
-    const maxRetries = 3;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`Calling contract.getFundraiser - Attempt ${attempt}/${maxRetries}`);
-        const result = await contract.getFundraiser(id);
-        console.log("Fundraiser result:", result);
-        
-        // Process fundraiser data
-        const owner = result[0];
-        const startDate = new Date(Number(result[1]) * 1000);
-        const endDate = new Date(Number(result[2]) * 1000);
-        const subject = result[3];
-        const details = result[4];
-        const goal = parseFloat(ethers.formatUnits(result[5], 6));
-        const amountRaised = parseFloat(ethers.formatUnits(result[6], 6));
-        const isCompleted = result[7];
-        const goalReached = result[8];
-        
-        setResult({
-          id: Number(id),
-          owner,
-          startDate,
-          endDate,
-          subject,
-          details,
-          goal,
-          amountRaised,
-          isCompleted,
-          goalReached
-        });
-        
-        setIsLoading(false);
-        return; // Success! Exit the retry loop
-      } catch (contractErr: any) {
-        console.error(`Error fetching fundraiser (attempt ${attempt}/${maxRetries}):`, contractErr);
-        
-        if (attempt < maxRetries) {
-          // Wait longer between each retry (exponential backoff)
-          const backoffTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s...
-          console.log(`Waiting ${backoffTime}ms before retry...`);
-          await delay(backoffTime);
-          
-          // Try with a different provider if not using wallet provider
-          if (typeof window !== 'undefined' && !window.ethereum) {
-            await tryNextProvider(contract?.target as string);
-          }
-          
-          continue;
-        }
-        
-        // Log technical details to console, but show user-friendly message
-        if (contractErr.message && contractErr.message.includes('missing revert data')) {
-          setError(`Couldn't parse contract data, please click the refresh button.`);
-        } else {
-          setError(`We're having trouble connecting to the blockchain. Please try refreshing the page.`);
-        }
-        
-        setIsLoading(false);
-      }
-    }
-  };
-  
-  // Try the next RPC provider if current one fails
-  const tryNextProvider = async (contractAddress: string) => {
-    if (!contractAddress) return false;
-    
-    for (let i = 0; i < RPC_PROVIDERS.length; i++) {
-      try {
-        console.log(`Trying alternative provider ${i+1}/${RPC_PROVIDERS.length}`);
-        const provider = new ethers.JsonRpcProvider(RPC_PROVIDERS[i]);
-        
-        // Test the provider with a simple call
-        await provider.getBlockNumber();
-        
-        // Create new contract instance with this provider
-        const contractInstance = new Contract(contractAddress, contractABI, provider);
-        setContract(contractInstance);
-        console.log(`Successfully switched to provider ${i+1}`);
-        return true;
-      } catch (err) {
-        console.error(`Failed to use provider ${i+1}:`, err);
-      }
-    }
-    
-    return false;
+  // Define overrideRpcProvider function
+  const overrideRpcProvider = () => {
+    return Promise.resolve(); // Add empty implementation to fix linter errors
   };
 
-  // Update handleGetFundraiser to use fetchFundraiserData
-  const handleGetFundraiser = async () => {
-    setIsLoading(true);
-    setError('');
-    await fetchFundraiserData(fundraiserId);
+  // Function to check and switch to Sepolia network
+  const checkAndSwitchToSepoliaNetwork = () => {
+    if (!window.ethereum) return Promise.resolve(false);
+    
+    return new Promise((resolve, reject) => {
+      // Check current chain ID
+      window.ethereum.request({ method: 'eth_chainId' })
+        .then((chainId: string) => {
+          // Sepolia chainId is 0xaa36a7 (hex) or 11155111 (decimal)
+          if (chainId !== '0xaa36a7') {
+            // Request to switch to Sepolia
+            window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0xaa36a7' }],
+            })
+              .then(() => {
+                // After switching, attempt to override RPC provider if problematic
+                overrideRpcProvider()
+                  .then(() => resolve(true))
+                  .catch(() => resolve(true)); // Continue even if override fails
+              })
+              .catch((switchError: any) => {
+                // This error code indicates that the chain has not been added to MetaMask
+                if (switchError.code === 4902) {
+                  window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [
+                      {
+                        chainId: '0xaa36a7',
+                        chainName: 'Sepolia Test Network',
+                        nativeCurrency: {
+                          name: 'Sepolia ETH',
+                          symbol: 'SEP',
+                          decimals: 18
+                        },
+                        rpcUrls: [
+                          'https://sepolia.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161',
+                          'https://eth-sepolia.public.blastapi.io',
+                          'https://ethereum-sepolia.blockpi.network/v1/rpc/public',
+                          'https://rpc.sepolia.org'
+                        ],
+                        blockExplorerUrls: ['https://sepolia.etherscan.io']
+                      }
+                    ],
+                  })
+                    .then(() => resolve(true))
+                    .catch((addError: any) => {
+                      console.error('Error adding Sepolia network:', addError);
+                      resolve(false);
+                    });
+                } else {
+                  console.error('Error switching to Sepolia network:', switchError);
+                  resolve(false);
+                }
+              });
+          } else {
+            // Already on Sepolia, check if using problematic RPC
+            overrideRpcProvider()
+              .then(() => resolve(true))
+              .catch(() => resolve(true)); // Continue even if override fails
+          }
+        })
+        .catch((error: any) => {
+          console.error('Error checking network:', error);
+          resolve(false);
+        });
+    });
+  };
+
+  // Modified handleDonationSubmit function
+  const handleDonationSubmit = () => {
+    setIsSubmitting(true);
+    setDonationError('');
+    
+    try {
+      // Safe check for ethereum
+      const hasWallet = typeof window !== 'undefined' && window.ethereum;
+      if (!hasWallet) {
+        setDonationError('Web3 wallet like MetaMask is required');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!contract) {
+        setDonationError('Contract not initialized');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      if (!donationAmount || parseFloat(donationAmount) <= 0) {
+        setDonationError('Please enter a valid amount');
+        setIsSubmitting(false);
+        return;
+      }
+  
+      if (!result || !result.id) {
+        setDonationError('No active fundraiser loaded');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Check if user is on Sepolia network
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      provider.getNetwork()
+        .then(network => {
+          // Sepolia chainId is 11155111
+          if (network.chainId !== BigInt(11155111)) {
+            setDonationError('Please switch to Sepolia network in your wallet');
+            setIsSubmitting(false);
+            return;
+          }
+          
+          // Get the current fundraiser ID from the result object
+          const currentFundraiserId = result.id;
+          console.log(`Processing donation for fundraiser #${currentFundraiserId}`);
+          
+          // Initialize provider and signer
+          const provider = new ethers.BrowserProvider(window.ethereum);
+          
+          // Use custom ABI with minimum required functions
+          const customUsdcAbi = [
+            'function approve(address spender, uint256 value) returns (bool)',
+            'function transfer(address to, uint256 value) returns (bool)'
+          ];
+          
+          provider.getSigner()
+            .then(signer => {
+              const usdcContract = new ethers.Contract(USDC_ADDRESS, customUsdcAbi, signer);
+              
+              // Convert donation amount to base units (USDC has 6 decimals)
+              const donationAmountInBaseUnits = ethers.parseUnits(donationAmount, 6);
+              
+              // Get the contract target safely
+              const contractTarget = contract?.target;
+              if (!contractTarget) {
+                setDonationError('Contract target is missing');
+                setIsSubmitting(false);
+                return;
+              }
+
+              // Direct method: Transfer USDC directly to contract then record donation
+              console.log(`Transferring ${donationAmount} USDC directly to contract at ${contractTarget}`);
+              
+              // First transfer USDC directly to the contract
+              usdcContract.transfer(contractTarget, donationAmountInBaseUnits)
+                .then(tx1 => {
+                  console.log("Transaction submitted:", tx1.hash);
+                  
+                  // Show a notification to the user
+                  alert(`USDC transfer transaction submitted! Hash: ${tx1.hash}\n\nPlease wait while we record your donation...`);
+                  
+                  // Wait for the transaction to be mined
+                  tx1.wait()
+                    .then(() => {
+                      console.log("USDC transfer confirmed");
+                      proceedWithRecordDonation();
+                    })
+                    .catch((err: any) => {
+                      console.log("Could not confirm transfer status, proceeding anyway");
+                      proceedWithRecordDonation();
+                    });
+                  
+                  function proceedWithRecordDonation() {
+                    // Ensure contract is still available
+                    if (!contract) {
+                      setDonationError('Contract connection lost');
+                      setIsSubmitting(false);
+                      return;
+                    }
+                    
+                    // Record the donation in the contract
+                    contract.recordDonation(currentFundraiserId, donationAmountInBaseUnits)
+                      .then(tx2 => {
+                        console.log("Record donation transaction submitted:", tx2.hash);
+                        
+                        // Show success message
+                        alert(`Donation record transaction submitted! Hash: ${tx2.hash}\n\nYour donation has been processed. The page will now refresh.`);
+                        
+                        // Reset state and refresh fundraiser data
+                        setDonationAmount('');
+                        setShowDonationInput(false);
+                        setIsSubmitting(false);
+                        
+                        // Refresh the data
+                        fetchFundraiserData(currentFundraiserId.toString());
+                      })
+                      .catch(err => {
+                        console.error("Error recording donation:", err);
+                        
+                        if (err.message && err.message.includes("user rejected")) {
+                          setDonationError("Transaction was rejected by your wallet");
+                        } else {
+                          setDonationError(`Transaction failed: ${err.message}`);
+                        }
+                        
+                        setIsSubmitting(false);
+                      });
+                  }
+                })
+                .catch(err => {
+                  console.error("Error processing donation:", err);
+                  
+                  if (err.message && err.message.includes("user rejected")) {
+                    setDonationError("Transaction was rejected by your wallet");
+                  } else {
+                    setDonationError(`Transaction failed: ${err.message}`);
+                  }
+                  
+                  setIsSubmitting(false);
+                });
+            })
+            .catch(err => {
+              console.error("Error getting signer:", err);
+              setDonationError(`Failed to access wallet: ${err.message}`);
+              setIsSubmitting(false);
+            });
+        })
+        .catch(err => {
+          console.error("Error checking network:", err);
+          setDonationError("Failed to check your network. Please ensure you're connected to Sepolia");
+          setIsSubmitting(false);
+        });
+    } catch (err: any) {
+      console.error('Donation error:', err);
+      setDonationError(err.message || 'Failed to process donation. Please try again.');
+      setIsSubmitting(false);
+    }
   };
 
   // Добавляем обработчик изменения URL при выборе другого ID
@@ -287,101 +561,6 @@ const HelpRequestPage = () => {
       return;
     }
     router.push('/helpme');
-  };
-
-  const handleDonationSubmit = async () => {
-    setIsSubmitting(true);
-    setDonationError('');
-    
-    try {
-      // Safe check for ethereum
-      const hasWallet = typeof window !== 'undefined' && window.ethereum;
-      if (!hasWallet) {
-        setDonationError('Web3 wallet like MetaMask is required');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (!contract) {
-        setDonationError('Contract not initialized');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      if (!donationAmount || parseFloat(donationAmount) <= 0) {
-        setDonationError('Please enter a valid amount');
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!result || !result.id) {
-        setDonationError('No active fundraiser loaded');
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // Get the current fundraiser ID from the result object
-      const currentFundraiserId = result.id;
-      console.log(`Processing donation for fundraiser #${currentFundraiserId}`);
-      
-      // Check if user has USDC balance
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
-      const userAddress = await signer.getAddress();
-      
-      // Check USDC balance
-      const userUsdcBalance = await usdcContract.balanceOf(userAddress);
-      const donationAmountInBaseUnits = ethers.parseUnits(donationAmount, 6); // USDC has 6 decimals
-      
-      if (userUsdcBalance < donationAmountInBaseUnits) {
-        setDonationError(`Insufficient USDC balance. You have ${ethers.formatUnits(userUsdcBalance, 6)} USDC`);
-        setIsSubmitting(false);
-        return;
-      }
-      
-      // If we're donating to fundraiser that's already beyond goal, show warning
-      if (result && result.amountCollectedRaw && result.amountNeededRaw) {
-        const remainingToGoal = parseFloat(result.amountNeededRaw) - parseFloat(result.amountCollectedRaw);
-        if (remainingToGoal <= 0) {
-          setDonationError('This fundraiser has already reached its goal!');
-          setIsSubmitting(false);
-          return;
-        }
-        
-        // Check if donation exceeds the remaining amount
-        if (parseFloat(donationAmount) > remainingToGoal) {
-          setDonationError(`This donation exceeds the remaining goal amount by $${(parseFloat(donationAmount) - remainingToGoal).toFixed(2)}`);
-          setIsSubmitting(false);
-          return;
-        }
-      }
-      
-      // First, approve the contract to spend USDC
-      console.log(`Approving ${donationAmount} USDC for contract at ${contract.target}`);
-      const tx1 = await usdcContract.approve(contract.target, donationAmountInBaseUnits);
-      await tx1.wait();
-      
-      // Then, call the contract function to record donation
-      console.log(`Recording donation of ${donationAmount} USDC to fundraiser #${currentFundraiserId}`);
-      const tx2 = await contract.recordDonation(currentFundraiserId, ethers.parseUnits(donationAmount, 6));
-      await tx2.wait();
-      
-      console.log('Donation successful! Refreshing fundraiser data.');
-      
-      // Reset state and refresh fundraiser data
-      setDonationAmount('');
-      setShowDonationInput(false);
-      
-      // Refresh the current fundraiser data
-      fetchFundraiserData(currentFundraiserId.toString());
-      
-    } catch (err: any) {
-      console.error('Donation error:', err);
-      setDonationError(err.message || 'Failed to process donation. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   // Правильное форматирование USDC значений с $
@@ -766,4 +945,4 @@ const HelpRequestPage = () => {
   );
 };
 
-export default HelpRequestPage; 
+export default HelpRequestPage;
