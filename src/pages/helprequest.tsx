@@ -238,7 +238,7 @@ const HelpRequestPage = () => {
       router.push('/verify');
       return;
     }
-    router.push('/helprequest');
+    router.push('/helpme');
   };
 
   const handleDonationSubmit = async () => {
