@@ -5,10 +5,220 @@
 				"internalType": "address",
 				"name": "_usdcAddress",
 				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_aavePoolAddress",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "_aUsdcAddress",
+				"type": "address"
 			}
 		],
 		"stateMutability": "nonpayable",
 		"type": "constructor"
+	},
+	{
+		"inputs": [],
+		"name": "EnforcedPause",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "ExpectedPause",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "FundingPeriodEnded",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "InvalidAddress",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint8",
+				"name": "code",
+				"type": "uint8"
+			}
+		],
+		"name": "InvalidInput",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			}
+		],
+		"name": "OwnableInvalidOwner",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "account",
+				"type": "address"
+			}
+		],
+		"name": "OwnableUnauthorizedAccount",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "PercentageOutOfRange",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "ReentrancyGuardReentrantCall",
+		"type": "error"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "token",
+				"type": "address"
+			}
+		],
+		"name": "SafeERC20FailedOperation",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "WithdrawalConditionsNotMet",
+		"type": "error"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "enabled",
+				"type": "bool"
+			}
+		],
+		"name": "AaveEnabledStatusUpdated",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "AaveWithdrawal",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "requestedAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "reason",
+				"type": "string"
+			}
+		],
+		"name": "AaveWithdrawalFailed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "bytes32",
+				"name": "contentHash",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "description",
+				"type": "string"
+			}
+		],
+		"name": "ContentAdded",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"internalType": "uint256",
+				"name": "id",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amt",
+				"type": "uint256"
+			}
+		],
+		"name": "Deposit",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "EmergencyAaveWithdrawal",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "newPercentage",
+				"type": "uint256"
+			}
+		],
+		"name": "EmergencyReservePercentageUpdated",
+		"type": "event"
 	},
 	{
 		"anonymous": false,
@@ -32,7 +242,7 @@
 				"type": "uint256"
 			}
 		],
-		"name": "Deposit",
+		"name": "EmergencyUserWithdrawal",
 		"type": "event"
 	},
 	{
@@ -58,9 +268,22 @@
 		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": false,
+				"internalType": "bool",
+				"name": "enabled",
+				"type": "bool"
+			}
+		],
+		"name": "EmergencyWithdrawalsStatusChanged",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
 				"indexed": true,
 				"internalType": "uint256",
-				"name": "fundraiserId",
+				"name": "id",
 				"type": "uint256"
 			},
 			{
@@ -72,13 +295,7 @@
 			{
 				"indexed": false,
 				"internalType": "uint256",
-				"name": "endDate",
-				"type": "uint256"
-			},
-			{
-				"indexed": false,
-				"internalType": "uint256",
-				"name": "fundraiserGoal",
+				"name": "goal",
 				"type": "uint256"
 			}
 		],
@@ -156,11 +373,36 @@
 		"type": "event"
 	},
 	{
+		"anonymous": false,
 		"inputs": [
 			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
+				"indexed": false,
 				"internalType": "uint256",
-				"name": "_endDate",
+				"name": "amount",
 				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "YieldDistributed",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint64",
+				"name": "_endDate",
+				"type": "uint64"
 			},
 			{
 				"internalType": "string",
@@ -184,6 +426,106 @@
 		"type": "function"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fromId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_count",
+				"type": "uint256"
+			}
+		],
+		"name": "batchGetFundraisers",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "address[]",
+						"name": "owners",
+						"type": "address[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "startDates",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "endDates",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "bytes32[]",
+						"name": "subjectHashes",
+						"type": "bytes32[]"
+					},
+					{
+						"internalType": "bytes32[]",
+						"name": "detailsHashes",
+						"type": "bytes32[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "fundraiserGoals",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "amountsRaised",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "bool[]",
+						"name": "areCompleted",
+						"type": "bool[]"
+					},
+					{
+						"internalType": "bool[]",
+						"name": "goalsReached",
+						"type": "bool[]"
+					}
+				],
+				"internalType": "struct FundraiserStorage.BatchResponse",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			}
+		],
+		"name": "canPerformEmergencyWithdrawal",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "possible",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [],
 		"name": "checkAllowance",
 		"outputs": [
@@ -202,9 +544,47 @@
 				"internalType": "address",
 				"name": "_recipient",
 				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "distributeYield",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			}
+		],
+		"name": "emergencyUserWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_recipient",
+				"type": "address"
 			}
 		],
 		"name": "emergencyWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "emergencyWithdrawFromAave",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -225,7 +605,7 @@
 				"type": "uint256"
 			}
 		],
-		"stateMutability": "pure",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -244,7 +624,7 @@
 				"type": "uint256"
 			}
 		],
-		"stateMutability": "pure",
+		"stateMutability": "view",
 		"type": "function"
 	},
 	{
@@ -255,6 +635,19 @@
 				"internalType": "string",
 				"name": "",
 				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getAvailableYield",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
@@ -293,6 +686,54 @@
 		"type": "function"
 	},
 	{
+		"inputs": [],
+		"name": "getContractStatus",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "isPaused",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isAaveEnabled",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "isEmergencyWithdrawalEnabled",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "reservePercentage",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalDeposits",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "contractUsdcBalance",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "availableYield",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "isAccountingSafe",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -304,42 +745,47 @@
 		"outputs": [
 			{
 				"internalType": "address",
-				"name": "owner",
+				"name": "",
 				"type": "address"
 			},
 			{
 				"internalType": "uint256",
-				"name": "startDate",
+				"name": "",
 				"type": "uint256"
 			},
 			{
 				"internalType": "uint256",
-				"name": "endDate",
+				"name": "",
 				"type": "uint256"
 			},
 			{
 				"internalType": "string",
-				"name": "subject",
+				"name": "",
 				"type": "string"
 			},
 			{
 				"internalType": "string",
-				"name": "additionalDetails",
+				"name": "",
 				"type": "string"
 			},
 			{
 				"internalType": "uint256",
-				"name": "fundraiserGoal",
+				"name": "",
 				"type": "uint256"
 			},
 			{
 				"internalType": "uint256",
-				"name": "amountRaised",
+				"name": "",
 				"type": "uint256"
 			},
 			{
 				"internalType": "bool",
-				"name": "goalReached",
+				"name": "",
+				"type": "bool"
+			},
+			{
+				"internalType": "bool",
+				"name": "",
 				"type": "bool"
 			}
 		],
@@ -378,60 +824,6 @@
 				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"name": "idToFundraiserEvent",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "owner",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "startDate",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "endDate",
-				"type": "uint256"
-			},
-			{
-				"internalType": "string",
-				"name": "subject",
-				"type": "string"
-			},
-			{
-				"internalType": "string",
-				"name": "additionalDetails",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "fundraiserGoal",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "amountRaised",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bool",
-				"name": "goalReached",
-				"type": "bool"
 			}
 		],
 		"stateMutability": "view",
@@ -489,8 +881,65 @@
 		"type": "function"
 	},
 	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_hash",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "string",
+				"name": "_content",
+				"type": "string"
+			}
+		],
+		"name": "registerContent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"inputs": [],
 		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "_enabled",
+				"type": "bool"
+			}
+		],
+		"name": "setAaveEnabled",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_newPercentage",
+				"type": "uint256"
+			}
+		],
+		"name": "setEmergencyReservePercentage",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "_enabled",
+				"type": "bool"
+			}
+		],
+		"name": "setEmergencyWithdrawalsEnabled",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -513,43 +962,6 @@
 		"name": "unpause",
 		"outputs": [],
 		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "usdcAddress",
-		"outputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "address",
-				"name": "",
-				"type": "address"
-			},
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"name": "userContributions",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"stateMutability": "view",
 		"type": "function"
 	},
 	{
