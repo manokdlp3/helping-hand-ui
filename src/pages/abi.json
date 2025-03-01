@@ -151,6 +151,7 @@
 		"type": "event"
 	},
 	{
+<<<<<<< Updated upstream
 		"inputs": [
 			{
 				"internalType": "uint64",
@@ -179,6 +180,8 @@
 		"type": "function"
 	},
 	{
+=======
+>>>>>>> Stashed changes
 		"anonymous": false,
 		"inputs": [
 			{
@@ -223,6 +226,7 @@
 		"type": "event"
 	},
 	{
+<<<<<<< Updated upstream
 		"inputs": [
 			{
 				"internalType": "address",
@@ -241,6 +245,8 @@
 		"type": "function"
 	},
 	{
+=======
+>>>>>>> Stashed changes
 		"anonymous": false,
 		"inputs": [
 			{
@@ -267,6 +273,7 @@
 		"type": "event"
 	},
 	{
+<<<<<<< Updated upstream
 		"inputs": [
 			{
 				"internalType": "uint256",
@@ -280,6 +287,8 @@
 		"type": "function"
 	},
 	{
+=======
+>>>>>>> Stashed changes
 		"anonymous": false,
 		"inputs": [
 			{
@@ -350,6 +359,7 @@
 		"type": "event"
 	},
 	{
+<<<<<<< Updated upstream
 		"inputs": [],
 		"name": "emergencyWithdrawFromAave",
 		"outputs": [],
@@ -357,6 +367,8 @@
 		"type": "function"
 	},
 	{
+=======
+>>>>>>> Stashed changes
 		"anonymous": false,
 		"inputs": [
 			{
@@ -595,6 +607,8 @@
 			},
 			{
 				"indexed": false,
+<<<<<<< Updated upstream
+=======
 				"internalType": "uint256",
 				"name": "timestamp",
 				"type": "uint256"
@@ -602,6 +616,133 @@
 		],
 		"name": "YieldDistributed",
 		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint64",
+				"name": "_endDate",
+				"type": "uint64"
+			},
+			{
+				"internalType": "string",
+				"name": "_subject",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_additionalDetails",
+				"type": "string"
+			},
+			{
+>>>>>>> Stashed changes
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "YieldDistributed",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fromId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_count",
+				"type": "uint256"
+			}
+		],
+		"name": "batchGetFundraisers",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "address[]",
+						"name": "owners",
+						"type": "address[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "startDates",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "endDates",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "bytes32[]",
+						"name": "subjectHashes",
+						"type": "bytes32[]"
+					},
+					{
+						"internalType": "bytes32[]",
+						"name": "detailsHashes",
+						"type": "bytes32[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "fundraiserGoals",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "uint256[]",
+						"name": "amountsRaised",
+						"type": "uint256[]"
+					},
+					{
+						"internalType": "bool[]",
+						"name": "areCompleted",
+						"type": "bool[]"
+					},
+					{
+						"internalType": "bool[]",
+						"name": "goalsReached",
+						"type": "bool[]"
+					}
+				],
+				"internalType": "struct FundraiserStorage.BatchResponse",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "_user",
+				"type": "address"
+			}
+		],
+		"name": "canPerformEmergencyWithdrawal",
+		"outputs": [
+			{
+				"internalType": "bool",
+				"name": "possible",
+				"type": "bool"
+			},
+			{
+				"internalType": "uint256",
+				"name": "maxAmount",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
 	},
 	{
 		"inputs": [
@@ -719,6 +860,60 @@
 	{
 		"inputs": [
 			{
+<<<<<<< Updated upstream
+=======
+				"internalType": "address",
+				"name": "_recipient",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "distributeYield",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			}
+		],
+		"name": "emergencyUserWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "_recipient",
+				"type": "address"
+			}
+		],
+		"name": "emergencyWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "emergencyWithdrawFromAave",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+>>>>>>> Stashed changes
 				"internalType": "uint256",
 				"name": "_amount",
 				"type": "uint256"
@@ -981,5 +1176,128 @@
 		],
 		"stateMutability": "view",
 		"type": "function"
+<<<<<<< Updated upstream
+=======
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "recordDonation",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes32",
+				"name": "_hash",
+				"type": "bytes32"
+			},
+			{
+				"internalType": "string",
+				"name": "_content",
+				"type": "string"
+			}
+		],
+		"name": "registerContent",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "renounceOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "_enabled",
+				"type": "bool"
+			}
+		],
+		"name": "setAaveEnabled",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_newPercentage",
+				"type": "uint256"
+			}
+		],
+		"name": "setEmergencyReservePercentage",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bool",
+				"name": "_enabled",
+				"type": "bool"
+			}
+		],
+		"name": "setEmergencyWithdrawalsEnabled",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "transferOwnership",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "unpause",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_fundraiserId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "withdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+>>>>>>> Stashed changes
 	}
 ]
