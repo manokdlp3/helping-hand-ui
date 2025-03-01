@@ -1,66 +1,36 @@
-## Foundry
+## Helping Hand
+Go Fund Me on the blockchain, but better.
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+### Humanity Protocol Integration
+On Helping Hand, anyone with a wallet can donate. However, only verified users can Ask for Help (create a fundraiser). To get verified, a user must provide a Verifiable Credential (VC). The application calls Humanity's API to validate the VC. If the user has no VC, the application directs them to where they can get one. In the future, we expect this to become more frictionless as more features and providers join the protocol.
 
-Foundry consists of:
+### The Helping Hand Team
+**Manok** - (Founder) Manok has a background in Java applications development and support. He's been dabbling in crypto since 2014. His focus now is to build and work on interesting projects in the space.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+**Aidan** - (Founder) Loves long walks and sunsets.
 
-## Documentation
+**Roman** - (Founder) His favorite color is Violet.
 
-https://book.getfoundry.sh/
+**Dylan** - (Founder) Can eat six tacos in one sitting.
 
-## Usage
-
-### Build
-
+### Testing Instructions
+#### Download
 ```shell
-$ forge build
+$ git clone https://github.com/manokdlp3/helping-hand-ui.git
 ```
 
-### Test
-
+#### Install Dependencies
 ```shell
-$ forge test
+$ npm install
 ```
+#### Provide API Key
+Enter your Humanity API Key in the env file.
 
-### Format
-
+#### Run
 ```shell
-$ forge fmt
+$ npm run dev
 ```
+On a web browser, navigate to `localhost:3000`. Click **Ask for Help**. If you're not verified yet, the application will ask you to verify. Click **Verify**. Upload your VC file. A sample file can be foound in `./src/pages/vc.json`. The application will call the Humanity API to verify the VC. Once verified, you can now create a fundraiser (Ask For Help). You do not need to be verified to donate.
 
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+### Our Experience Building on Humanity
+Integrating with Humanity is pretty straightforward. Requesting for an API key was easy and Humanity was quick to provide us one. There are features that we wish were available. Perhaps they will be, in future versions of the protocol. 
