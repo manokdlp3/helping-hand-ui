@@ -7,9 +7,9 @@ On Helping Hand, anyone with a wallet can donate. However, only verified users c
 ### The Helping Hand Team
 **Manok** - (Founder) Manok has a background in Java applications development and support. He's been dabbling in crypto since 2014. His focus now is to build and work on interesting projects in the space.
 
-**Aidan** - (Founder) Loves long walks and sunsets.
+**Aidan** - (Founder) Loves to backpack and ski. His day job is as a tax software consultant. This week he is hacking on crypto projects. He can eat 2 quesaritos in one
 
-**Roman** - (Founder) His favorite color is Violet.
+**Roman** - (Founder) His favorite color is Violet, he missed a plane once and found the love of his life. Miracles do happen! LET'S GO ASF AMPL TOKENS!
 
 **Dylan** - (Founder) Can eat six tacos in one sitting.
 
