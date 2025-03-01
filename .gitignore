@@ -18,6 +18,7 @@
 # misc
 .DS_Store
 *.pem
+/src/pages/temp.tsx
 
 # debug
 npm-debug.log*
