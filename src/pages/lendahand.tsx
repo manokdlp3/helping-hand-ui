@@ -240,7 +240,7 @@ export default function LendAHand() {
       router.push('/verify');
       return;
     }
-    router.push('/helprequest');
+    router.push('/helpme');
   };
 
   return (
