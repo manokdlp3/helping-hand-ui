@@ -19,12 +19,14 @@ On Helping Hand, anyone with a wallet can donate. However, only verified users c
 $ git clone https://github.com/manokdlp3/helping-hand-ui.git
 ```
 
-### Install Dependencies
+#### Install Dependencies
 ```shell
 $ npm install
 ```
+#### Provide API Key
+Enter your Humanity API Key in the env file.
 
-### Run
+#### Run
 ```shell
 $ npm run dev
 ```
